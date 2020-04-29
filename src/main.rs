@@ -13,6 +13,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use unicode_normalization::UnicodeNormalization;
 mod igdb;
+use rocket::response::content::Content;
+use std::fs;
 
 #[derive(Debug, Serialize, Clone)]
 struct Game {
@@ -33,7 +35,7 @@ struct Game {
     pub version: Option<String>,
 }
 
-fn game(igdb: igdb::Game, distribution: GameDistribution) -> Game {
+fn game(igdb: igdb::Game, distribution: GameDistribution, metadata: fs::Metadata) -> Game {
     let pc_multiplayer = match igdb.multiplayer_modes {
         Some(multiplayer_modes) => multiplayer_modes
             .into_iter()
@@ -88,19 +90,14 @@ fn game(igdb: igdb::Game, distribution: GameDistribution) -> Game {
             .and_then(|mode| mode.onlinemax)
             .unwrap_or(1),
 
-        size_bytes: std::fs::metadata(format!(
-            "/mnt/media1000/Games/{}",
-            distribution.path.to_string_lossy()
-        ))
-        .unwrap()
-        .len(),
+        size_bytes: metadata.len(),
         version: {
             match title_and_version(&distribution.path.to_string_lossy()) {
                 Some((_, version)) => version,
                 None => None,
             }
         },
-        path: distribution.path,
+        path: PathBuf::from("/games").join(distribution.path),
     }
 }
 
@@ -118,8 +115,6 @@ struct GamesConfig {
 }
 
 fn update(config: &GamesConfig) -> Option<Vec<Game>> {
-    let mut games = config.games.clone();
-
     // Sanity check for missing root directory.
     match config.root.metadata() {
         Err(_) => {
@@ -140,33 +135,11 @@ fn update(config: &GamesConfig) -> Option<Vec<Game>> {
         }
     }
 
-    // Sanity check for duplicate slugs.
-    let mut unique_slugs = HashSet::new();
-    let mut duplicate_slugs: HashMap<String, u32> = HashMap::new();
-    games.retain(|g| {
-        if unique_slugs.contains(&g.slug) {
-            if let Some(duplicates) = duplicate_slugs.get_mut(&g.slug) {
-                *duplicates += 1;
-            } else {
-                duplicate_slugs.insert(g.slug.clone(), 2);
-            }
-            return false;
-        } else {
-            unique_slugs.insert(g.slug.clone());
-            return true;
-        }
-    });
-    for (slug, count) in duplicate_slugs {
-        eprintln!(
-            "Warning: found {} games with the same slug {:?}",
-            count, slug
-        );
-    }
-
-    // Sanity check for missing executables.
+    let mut games = config.games.clone();
     let root = &config.root;
     games.retain(|g| {
-        let path = PathBuf::from_iter([root, &g.path].iter());
+        // Sanity check for missing executables.
+        let path = PathBuf::from_iter([&config.root, &g.path].iter());
         if !path.exists() {
             eprintln!("Warning: game path doesn't exist {:?}", path);
             return false;
@@ -174,6 +147,15 @@ fn update(config: &GamesConfig) -> Option<Vec<Game>> {
             return true;
         }
     });
+
+    let (unique_games, duplicate_games) = split_conflicting_games(&games);
+    games = unique_games;
+    for (slug, count) in duplicate_games {
+        eprintln!(
+            "Warning: found {} games with the same slug {:?}",
+            count, slug
+        );
+    }
 
     let igdb_games = {
         let slugs: Vec<&str> = config.games.iter().map(|g| g.slug.as_str()).collect();
@@ -195,12 +177,51 @@ fn update(config: &GamesConfig) -> Option<Vec<Game>> {
         .into_iter()
         .map(|g| {
             let igdb_game = igdb_games.iter().find(|i| i.slug == g.slug).unwrap();
-            game(igdb_game.clone(), g)
+            let metadata = std::fs::metadata(PathBuf::from_iter([root, &g.path].iter())).unwrap();
+            game(igdb_game.clone(), g, metadata)
         })
         .collect();
     games.sort_by(|a, b| a.name.cmp(&b.name));
 
     Some(games)
+}
+
+fn split_conflicting_games(
+    games: &[GameDistribution],
+) -> (Vec<GameDistribution>, Vec<(String, usize)>) {
+    enum Similarity {
+        Unique(GameDistribution),
+        Conflicting(Vec<GameDistribution>),
+    }
+    let mut similarities: HashMap<&str, Similarity> = HashMap::new();
+    for g in games {
+        similarities
+            .entry(g.slug.as_str())
+            .and_modify(|game| match game {
+                Similarity::Unique(unique_game) => {
+                    *game = Similarity::Conflicting(vec![unique_game.clone(), g.clone()]);
+                }
+                Similarity::Conflicting(games) => {
+                    games.push(g.clone());
+                }
+            })
+            .or_insert(Similarity::Unique(g.clone()));
+    }
+
+    let mut unique_games = Vec::new();
+    let mut conflicting_games = Vec::new();
+    for (slug, similarity) in similarities.into_iter() {
+        match similarity {
+            Similarity::Unique(game) => {
+                unique_games.push(game);
+            }
+            Similarity::Conflicting(games) => {
+                conflicting_games.push((slug.to_owned(), games.len()));
+            }
+        }
+    }
+
+    (unique_games, conflicting_games)
 }
 
 #[get("/themes")]
@@ -218,8 +239,14 @@ fn get_games(games: State<Arc<Mutex<Vec<Game>>>>) -> Json<Vec<Game>> {
     Json((*games.lock().unwrap()).clone())
 }
 
+#[get("/")]
+fn get_index() -> Content<&'static str> {
+    let index = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
+    Content(rocket::http::ContentType::HTML, index)
+}
+
 fn main() {
-    let config: GamesConfig = {
+    let mut config: GamesConfig = {
         let text = match std::fs::read_to_string("games.toml") {
             Ok(text) => text,
             Err(_) => {
@@ -229,6 +256,8 @@ fn main() {
         };
         toml::from_str(&text).unwrap()
     };
+
+    for game in config.games.iter_mut() {}
 
     let allowed_origins = AllowedOrigins::All;
     let cors = CorsOptions {
@@ -251,8 +280,8 @@ fn main() {
         .manage(games.clone())
         .manage(genres.clone())
         .manage(themes.clone())
-        .mount("/games", StaticFiles::from("/mnt/media1000/Games"))
-        .mount("/", routes![get_games, get_genres, get_themes])
+        .mount("/games", StaticFiles::from(config.root))
+        .mount("/", routes![get_index, get_games, get_genres, get_themes])
         .launch();
 }
 
