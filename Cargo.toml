@@ -1,0 +1,25 @@
+[package]
+name = 'grifter'
+version = '0.1.0'
+authors = ['Terry Brashaw <terrybrashaw@gmail.com>']
+edition = '2018'
+
+[dependencies]
+json = '*'
+serde_json = '*'
+rocket_contrib = '*'
+rocket_cors = '*'
+toml = '*'
+unicode-normalization = "*"
+
+[dependencies.ureq]
+version = '*'
+features = ['json']
+
+[dependencies.serde]
+version = '*'
+features = ['derive']
+
+[dependencies.rocket]
+version = '0.4.4'
+default-features = false
