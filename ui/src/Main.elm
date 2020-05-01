@@ -9,6 +9,7 @@ import Html.Styled.Attributes as Attr exposing (checked, css, href, placeholder,
 import Html.Styled.Events exposing (onCheck, onClick, onInput)
 import Html.Styled.Keyed as Keyed
 import Http
+import Pages exposing (Pages)
 import Set exposing (Set)
 import Task
 import Url
@@ -27,11 +28,8 @@ main =
 
 type alias Model =
     { allGames : List Game
-    , games : List Game
+    , games : Maybe (Pages (List Game))
     , genres : List Genre
-    , page : Int
-    , pageCount : Int
-    , gamesPerPage : Int
     , search : String
     , filteredGenres : Set Int
     , filterPlayers : List String
@@ -42,24 +40,22 @@ type Msg
     = NoOp
     | GotGames (Result Http.Error (List Game))
     | GotGenres (Result Http.Error (List Genre))
-    | NextPage
-    | PrevPage
+    | NextPage (Pages (List Game))
+    | PrevPage (Pages (List Game))
     | Search String
     | FilterGenre ( Int, Bool )
 
 
+root : Root
 root =
-    CrossOrigin "http://192.168.1.197:8000"
+    CrossOrigin "http://192.168.1.197:9090"
 
 
 init : flags -> ( Model, Cmd Msg )
 init _ =
     ( { allGames = []
-      , games = []
+      , games = Nothing
       , genres = []
-      , page = 0
-      , pageCount = 0
-      , gamesPerPage = 30
       , search = ""
       , filteredGenres = Set.empty
       , filterPlayers = []
@@ -73,17 +69,11 @@ init _ =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let
-        pageCount games =
-            ceiling (toFloat (List.length games) / toFloat model.gamesPerPage)
-    in
     case msg of
         GotGames (Ok games) ->
             ( { model
                 | allGames = games
-                , games = games
-                , pageCount = pageCount games
-                , page = 0
+                , games = Pages.fromList (chunk gamesPerPage games)
                 , search = ""
               }
             , Cmd.none
@@ -98,11 +88,11 @@ update msg model =
         GotGames (Err _) ->
             ( model, Cmd.none )
 
-        NextPage ->
-            ( { model | page = model.page + 1 }, Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0) )
+        NextPage next ->
+            ( { model | games = Just next }, Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0) )
 
-        PrevPage ->
-            ( { model | page = model.page - 1 }, Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0) )
+        PrevPage prev ->
+            ( { model | games = Just prev }, Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0) )
 
         Search rawSearch ->
             let
@@ -112,7 +102,7 @@ update msg model =
                 games =
                     filterGames search model.filteredGenres model.allGames
             in
-            ( { model | games = games, pageCount = pageCount games, page = 0, search = search }, Cmd.none )
+            ( { model | games = Pages.fromList (chunk gamesPerPage games), search = search }, Cmd.none )
 
         FilterGenre ( id, isFiltered ) ->
             let
@@ -126,7 +116,7 @@ update msg model =
                 games =
                     filterGames model.search filteredGenres model.allGames
             in
-            ( { model | games = games, pageCount = pageCount games, page = 0, filteredGenres = filteredGenres }, Cmd.none )
+            ( { model | games = Pages.fromList (chunk gamesPerPage games), filteredGenres = filteredGenres }, Cmd.none )
 
         NoOp ->
             ( model, Cmd.none )
@@ -184,14 +174,18 @@ view model =
         [ linkStylesheet "https://fonts.googleapis.com/css2?family=Manrope&display=swap"
         , viewSidebar model.genres model.filteredGenres
         , div [ css [ flexGrow (int 1) ] ]
-            [ viewGames model.page model.gamesPerPage model.games
-            , viewPagination model.page model.pageCount
-            ]
+            (case model.games of
+                Just games ->
+                    [ viewGames games, viewPaginator games ]
+
+                Nothing ->
+                    []
+            )
         ]
 
 
-viewPagination : Int -> Int -> Html Msg
-viewPagination page pageCount =
+viewPaginator : Pages (List Game) -> Html Msg
+viewPaginator games =
     let
         styleButton =
             [ backgroundColor (rgba 0 0 0 0)
@@ -205,11 +199,33 @@ viewPagination page pageCount =
             , userSelectNone
             , Css.disabled [ opacity (num 0.15), cursor unset ]
             ]
+
+        attrNext =
+            case Pages.next games of
+                Just next ->
+                    [ css styleButton, onClick (NextPage next) ]
+
+                Nothing ->
+                    [ css styleButton, Attr.disabled True ]
+
+        attrPrev =
+            case Pages.previous games of
+                Just prev ->
+                    [ css styleButton, onClick (PrevPage prev) ]
+
+                Nothing ->
+                    [ css styleButton, Attr.disabled True ]
+
+        ( current, _ ) =
+            Pages.current games
+
+        total =
+            Pages.count games
     in
     div [ css [ textAlign center ] ]
-        [ button [ onClick PrevPage, css styleButton, Attr.disabled (page <= 0) ] [ text "❮" ]
-        , span [] [ text ("Page " ++ String.fromInt (page + 1) ++ "/" ++ String.fromInt pageCount) ]
-        , button [ onClick NextPage, css styleButton, Attr.disabled (page + 1 >= pageCount) ] [ text "❯" ]
+        [ button attrPrev [ text "❮" ]
+        , span [] [ text ("Page " ++ String.fromInt (current + 1) ++ "/" ++ String.fromInt total) ]
+        , button attrNext [ text "❯" ]
         ]
 
 
@@ -302,13 +318,8 @@ viewFilterGroup title options =
 -- GAMES --
 
 
-paginate : Int -> Int -> List item -> List item
-paginate page itemsPerPage =
-    List.drop (itemsPerPage * page) >> List.take itemsPerPage
-
-
-viewGames : Int -> Int -> List Game -> Html Msg
-viewGames page gamesPerPage games =
+viewGames : Pages (List Game) -> Html Msg
+viewGames games =
     Keyed.node "div"
         [ css
             [ displayFlex
@@ -316,7 +327,7 @@ viewGames page gamesPerPage games =
             , property "align-content" "flex-start"
             ]
         ]
-        (games |> paginate page gamesPerPage |> List.map viewKeyedGame)
+        (games |> Pages.current |> Tuple.second |> List.map viewKeyedGame)
 
 
 viewKeyedGame : Game -> ( String, Html Msg )
@@ -395,7 +406,25 @@ viewGame game =
 
 
 
+-- LIST --
+
+
+chunk : Int -> List a -> List (List a)
+chunk size items =
+    if List.length items <= size then
+        [ List.take size items ]
+
+    else
+        List.take size items :: chunk size (List.drop size items)
+
+
+
 -- GLOBALS --
+
+
+gamesPerPage : Int
+gamesPerPage =
+    30
 
 
 spacing : Float
