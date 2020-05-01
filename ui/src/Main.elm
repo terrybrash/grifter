@@ -48,6 +48,10 @@ type Msg
     | FilterGenre ( Int, Bool )
 
 
+root =
+    CrossOrigin "http://192.168.1.197:8000"
+
+
 init : flags -> ( Model, Cmd Msg )
 init _ =
     ( { allGames = []
@@ -61,8 +65,8 @@ init _ =
       , filterPlayers = []
       }
     , Cmd.batch
-        [ getGames GotGames (CrossOrigin "http://192.168.1.197:8000")
-        , getGenres GotGenres (CrossOrigin "http://192.168.1.197:8000")
+        [ getGames GotGames root
+        , getGenres GotGenres root
         ]
     )
 
@@ -357,8 +361,9 @@ viewGame game =
             , borderRadius (px 2)
             ]
     in
-    div
-        [ css
+    a
+        [ href (Url.Builder.custom root [ game.path ] [] Nothing)
+        , css
             [ width (px 150)
             , height (px 200)
             , position relative
