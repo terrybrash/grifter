@@ -411,7 +411,10 @@ viewGame game =
 
 chunk : Int -> List a -> List (List a)
 chunk size items =
-    if List.length items <= size then
+    if List.isEmpty items || size == 0 then
+        []
+
+    else if List.length items <= size then
         [ List.take size items ]
 
     else
