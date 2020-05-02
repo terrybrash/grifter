@@ -355,7 +355,7 @@ viewGame game =
             , borderTop unset
             , borderLeft unset
             , opacity (num 0.3)
-            , property "mix-blend-mode" "darken"
+            , property "mix-blend-mode" "overlay"
             , borderRadius (px 2)
             ]
 
