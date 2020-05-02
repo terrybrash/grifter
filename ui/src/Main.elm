@@ -179,7 +179,7 @@ view model =
                     [ viewGames games, viewPaginator games ]
 
                 Nothing ->
-                    []
+                    [ h3 [] [ text "No games here!" ] ]
             )
         ]
 
