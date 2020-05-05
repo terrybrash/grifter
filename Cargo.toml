@@ -3,7 +3,7 @@ name = 'grifter'
 version = '0.1.0'
 authors = ['Terry Brashaw <terrybrashaw@gmail.com>']
 edition = '2018'
-build = "build.rs"
+build = 'build.rs'
 
 [dependencies]
 json = '*'
@@ -11,7 +11,7 @@ serde_json = '*'
 rocket_contrib = '*'
 rocket_cors = '*'
 toml = '*'
-unicode-normalization = "*"
+unicode-normalization = '*'
 
 [dependencies.ureq]
 version = '*'
