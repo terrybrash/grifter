@@ -1,4 +1,4 @@
-module Main exposing (..)
+module Main exposing (main)
 
 import Backend exposing (Game, Genre, getGames, getGenres)
 import Browser
@@ -280,10 +280,12 @@ viewFilter : (Bool -> Msg) -> String -> Bool -> Html Msg
 viewFilter msg option isEnabled =
     let
         styleLabel =
-            [ display block
+            [ displayFlex
+            , alignItems center
             , cursor pointer
-            , hover [ backgroundColor accent ]
-            , lineHeight (num 1.5)
+            , whiteSpace noWrap
+            , userSelectNone
+            , lineHeight (num 1.7)
 
             -- Stretch the label across the entire sidebar.
             , marginLeft (px -spacing)
@@ -302,7 +304,22 @@ checkbox : List (Attribute msg) -> Html msg
 checkbox attributes =
     input
         ([ type_ "checkbox"
-         , css [ verticalAlign middle ]
+         , css
+            [ verticalAlign middle
+            , property "-webkit-appearance" "none"
+            , backgroundColor black
+            , width (px 14)
+            , height (px 14)
+            , border3 (px 1.5) solid white
+            , borderRadius (px 2)
+            , cursor inherit
+            , margin4 (px 0) (px 7) (px 0) (px 0)
+            , Css.checked
+                [ backgroundColor white
+                , border unset
+                , marginLeft (px 10)
+                ]
+            ]
          ]
             ++ attributes
         )
@@ -346,19 +363,6 @@ viewGame game =
             , boxSizing borderBox
             ]
 
-        styleShadow =
-            [ position absolute
-            , width (pct 100)
-            , height (pct 100)
-            , boxSizing borderBox
-            , border3 (px 1) solid (rgb 0 0 0)
-            , borderTop unset
-            , borderLeft unset
-            , opacity (num 0.3)
-            , property "mix-blend-mode" "overlay"
-            , borderRadius (px 2)
-            ]
-
         styleHighlight =
             [ position absolute
             , width (pct 100)
@@ -384,10 +388,10 @@ viewGame game =
             , borderRadius (px 2)
             , overflow hidden
             , backgroundColor (hex "#4c3b71")
+            , boxShadow5 (px 0) (px 2) (px 1) (px 0) (rgba 0 0 0 0.3)
             ]
         ]
         [ div [ css styleHighlight ] []
-        , div [ css styleShadow ] []
         , case game.cover of
             Just cover ->
                 img

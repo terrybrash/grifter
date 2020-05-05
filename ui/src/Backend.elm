@@ -32,7 +32,7 @@ getGenres : (Result Http.Error (List Genre) -> msg) -> Root -> Cmd msg
 getGenres msg root =
     Http.get
         { url = Url.Builder.custom root [ "genres" ] [] Nothing
-        , expect = Http.expectJson msg (list decodeTheme)
+        , expect = Http.expectJson msg (list decodeGenre)
         }
 
 
