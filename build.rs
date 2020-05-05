@@ -1,5 +1,4 @@
 use std::env;
-use std::iter::FromIterator;
 use std::path::PathBuf;
 use std::process::Command;
 

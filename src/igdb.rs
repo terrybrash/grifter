@@ -84,64 +84,62 @@ pub enum Error {
     Json(serde_json::error::Error),
 }
 
+const IGDB_MAX_LIMIT: usize = 500;
+
 pub fn get_games<T>(user_key: &str, slugs: &[T]) -> Result<Vec<Game>, Error>
 where
     T: std::fmt::Display,
 {
     if slugs.is_empty() {
-        return Ok(vec![]);
-    }
-
-    const IGDB_LIMIT: usize = 500;
-    if slugs.len() > IGDB_LIMIT {
-        let head = get_games(user_key, &slugs[0..IGDB_LIMIT]);
-        let tail = get_games(user_key, &slugs[IGDB_LIMIT..]);
+        Ok(vec![])
+    } else if slugs.len() > IGDB_MAX_LIMIT {
+        let head = get_games(user_key, &slugs[0..IGDB_MAX_LIMIT]);
+        let tail = get_games(user_key, &slugs[IGDB_MAX_LIMIT..]);
         match (head, tail) {
-            (Ok(head), Ok(tail)) => return Ok([head, tail].concat()),
-            (err @ Err(_), _) => return err,
-            (_, err @ Err(_)) => return err,
+            (Ok(head), Ok(tail)) => Ok([head, tail].concat()),
+            (err @ Err(_), _) | (_, err @ Err(_)) => err,
         }
+    } else {
+        let conditions = slugs
+            .iter()
+            .map(|s| format!("slug = \"{}\"", &s))
+            .collect::<Vec<String>>()
+            .join(" | ");
+        let fields = [
+            "id",
+            "slug",
+            "name",
+            "updated_at",
+            "cover.image_id",
+            "videos.video_id",
+            "screenshots.image_id",
+            "summary",
+            "multiplayer_modes.*",
+            "game_modes",
+            "genres",
+            "themes",
+            "alternative_names.name",
+        ];
+        let query = format!(
+            "fields {fields}; where {conditions}; limit {limit};",
+            fields = fields.join(", "),
+            conditions = conditions,
+            limit = IGDB_MAX_LIMIT
+        );
+        let response = get("https://api-v3.igdb.com/games")
+            .set("user-key", user_key)
+            .send_string(&query)
+            .into_string()
+            .map_err(Error::Io)?;
+
+        serde_json::from_str(&response).map_err(Error::Json)
     }
-
-    let conditions = slugs
-        .iter()
-        .map(|s| format!("slug = \"{}\"", &s))
-        .collect::<Vec<String>>()
-        .join(" | ");
-    let conditions = format!("where {};", conditions);
-
-    let fields = [
-        "id",
-        "slug",
-        "name",
-        "updated_at",
-        "cover.image_id",
-        "videos.video_id",
-        "screenshots.image_id",
-        "summary",
-        "multiplayer_modes.*",
-        "game_modes",
-        "genres",
-        "themes",
-        "alternative_names.name",
-    ];
-    let fields = format!("fields {};", fields.join(", "));
-    let limit = format!("limit {};", IGDB_LIMIT);
-
-    let query = [fields, conditions, limit].join(" ");
-    let response = get("https://api-v3.igdb.com/games")
-        .set("user-key", user_key)
-        .send_string(&query)
-        .into_string()
-        .map_err(Error::Io)?;
-
-    serde_json::from_str(&response).map_err(Error::Json)
 }
 
 pub fn get_genres(user_key: &str) -> Result<Vec<Genre>, Error> {
     let response = get("https://api-v3.igdb.com/genres")
         .set("user-key", user_key)
-        .send_string("fields id, name, slug; limit 500;")
+        .send_string(&format!("fields id, name, slug; limit {};", IGDB_MAX_LIMIT))
         .into_string()
         .map_err(Error::Io)?;
 
@@ -151,7 +149,7 @@ pub fn get_genres(user_key: &str) -> Result<Vec<Genre>, Error> {
 pub fn get_themes(user_key: &str) -> Result<Vec<Theme>, Error> {
     let response = get("https://api-v3.igdb.com/themes")
         .set("user-key", user_key)
-        .send_string("fields id, name, slug; limit 500;")
+        .send_string(&format!("fields id, name, slug; limit {};", IGDB_MAX_LIMIT))
         .into_string()
         .map_err(Error::Io)?;
 
