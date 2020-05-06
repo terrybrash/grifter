@@ -4,19 +4,6 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Game {
-    pub path: PathBuf,
-    pub slug: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Config {
-    pub root: PathBuf,
-    pub igdb_key: String,
-    pub games: Vec<Game>,
-}
-
 #[derive(Clone)]
 pub enum Problem {
     ConflictingGames(Vec<Game>),
@@ -37,6 +24,19 @@ impl fmt::Display for Problem {
             Problem::UnusedExe(path) => write!(f, "{:?} exists in root dir but isn't used", path),
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Game {
+    pub path: PathBuf,
+    pub slug: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Config {
+    pub root: PathBuf,
+    pub igdb_key: String,
+    pub games: Vec<Game>,
 }
 
 impl Config {

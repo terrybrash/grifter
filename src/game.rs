@@ -66,6 +66,8 @@ pub struct Game {
     pub game_modes: Vec<u64>,
     pub max_players_offline: u32,
     pub max_players_online: u32,
+    pub screenshots: Vec<String>,
+    pub videos: Vec<String>,
 
     // DISTRIBUTION
     pub path: PathBuf,
@@ -129,6 +131,29 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
             .as_ref()
             .and_then(|mode| mode.onlinemax)
             .unwrap_or(1),
+        videos: igdb
+            .videos
+            .map(|videos| {
+                videos
+                    .iter()
+                    .map(|v| format!("https://www.youtube.com/embed/{}", v.video_id))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        screenshots: igdb
+            .screenshots
+            .map(|screenshots| {
+                screenshots
+                    .iter()
+                    .map(|ss| {
+                        format!(
+                            "https://images.igdb.com/igdb/image/upload/t_original/{}.jpg",
+                            ss.image_id
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
 
         size_bytes: metadata.len(),
         version: {
