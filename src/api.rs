@@ -1,7 +1,8 @@
 use crate::config::Config;
 use crate::game::Game;
 use crate::igdb;
-use rocket::response::content::Content;
+use rocket::http::ContentType;
+use rocket::response::Response;
 use rocket::State;
 use rocket::{get, routes};
 use rocket_contrib::json::Json;
@@ -49,7 +50,11 @@ fn get_games(games: State<Arc<Mutex<Vec<Game>>>>) -> Json<Vec<Game>> {
 }
 
 #[get("/")]
-fn get_index() -> Content<&'static str> {
-    let index = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
-    Content(rocket::http::ContentType::HTML, index)
+fn get_index() -> Response<'static> {
+    let index = include_bytes!(concat!(env!("OUT_DIR"), "/index.html.br"));
+    Response::build()
+        .header(ContentType::HTML)
+        .raw_header("Content-Encoding", "br")
+        .streamed_body(&index[..])
+        .finalize()
 }

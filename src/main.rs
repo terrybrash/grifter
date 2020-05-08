@@ -20,6 +20,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Warning: {}", problem);
     }
 
+    println!("Indexed {} games.", games.len());
+
     api::start(&config, games);
     Ok(())
 }
