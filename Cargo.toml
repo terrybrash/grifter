@@ -12,6 +12,7 @@ rocket_contrib = '*'
 rocket_cors = '*'
 toml = '*'
 unicode-normalization = '*'
+flate2 = '*'
 
 [dependencies.ureq]
 version = '*'

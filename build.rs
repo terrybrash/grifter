@@ -43,13 +43,6 @@ fn main() {
     );
     std::fs::write(out_dir.join("index.html"), index).unwrap();
 
-    // Compress the index.html
-    Command::new("brotli")
-        .current_dir(out_dir)
-        .args(&["--force", "index.html"])
-        .output()
-        .unwrap();
-
     // Cleanup
     std::fs::remove_file("ui/elm.js").unwrap();
 }
