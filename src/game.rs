@@ -61,6 +61,7 @@ pub struct Game {
     pub slug: String,
     pub search_names: Vec<String>,
     pub cover: Option<String>,
+    pub summary: Option<String>,
     pub genres: Vec<u64>,
     pub themes: Vec<u64>,
     pub game_modes: Vec<u64>,
@@ -131,6 +132,7 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
             .as_ref()
             .and_then(|mode| mode.onlinemax)
             .unwrap_or(1),
+        summary: igdb.summary,
         videos: igdb
             .videos
             .map(|videos| {
