@@ -55,6 +55,13 @@ pub fn games_from_config(config: &Config) -> Result<(Vec<Game>, Vec<Problem>)> {
 }
 
 #[derive(Debug, Serialize, Clone)]
+pub enum Multiplayer {
+    None,
+    Some,
+    Limited(u32),
+}
+
+#[derive(Debug, Serialize, Clone)]
 pub struct Game {
     // INFO
     pub name: String,
@@ -64,9 +71,12 @@ pub struct Game {
     pub summary: Option<String>,
     pub genres: Vec<u64>,
     pub themes: Vec<u64>,
-    pub game_modes: Vec<u64>,
-    pub max_players_offline: u32,
-    pub max_players_online: u32,
+    pub has_single_player: bool,
+    pub has_coop_campaign: bool,
+    pub offline_coop: Multiplayer,
+    pub offline_pvp: Multiplayer,
+    pub online_coop: Multiplayer,
+    pub online_pvp: Multiplayer,
     pub screenshots: Vec<String>,
     pub videos: Vec<String>,
 
@@ -77,12 +87,65 @@ pub struct Game {
 }
 
 fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -> Game {
-    let pc_multiplayer = match igdb.multiplayer_modes {
-        Some(multiplayer_modes) => multiplayer_modes
+    const PLATFORM_WINDOWS: u64 = 6;
+    let pc_multiplayer = igdb.multiplayer_modes.and_then(|modes| {
+        modes
             .into_iter()
-            .find(|mode| mode.platform == Some(6) || mode.platform == None),
-        None => None,
-    };
+            .find(|mode| mode.platform == Some(PLATFORM_WINDOWS) || mode.platform == None)
+    });
+
+    const GAME_MODE_SINGLE_PLAYER: u64 = 1;
+    const GAME_MODE_MULTIPLAYER: u64 = 2;
+    const GAME_MODE_COOP: u64 = 3;
+    let game_modes = igdb.game_modes.unwrap_or_default();
+    let has_single_player = game_modes.contains(&GAME_MODE_SINGLE_PLAYER);
+    let has_coop_campaign;
+    let offline_coop;
+    let offline_pvp;
+    let online_coop;
+    let online_pvp;
+    match pc_multiplayer {
+        Some(multiplayer) => {
+            has_coop_campaign = multiplayer.campaigncoop;
+            offline_coop = match (multiplayer.offlinecoop, multiplayer.offlinecoopmax) {
+                (_, Some(0)) => Multiplayer::None,
+                (_, Some(max)) => Multiplayer::Limited(max),
+                (true, None) => Multiplayer::Some,
+                (false, None) => Multiplayer::None,
+            };
+            offline_pvp = match multiplayer.offlinemax {
+                Some(0) => Multiplayer::None,
+                Some(max) => Multiplayer::Limited(max),
+                None => Multiplayer::None,
+            };
+            online_coop = match (multiplayer.onlinecoop, multiplayer.onlinecoopmax) {
+                (_, Some(0)) => Multiplayer::None,
+                (_, Some(max)) => Multiplayer::Limited(max),
+                (true, None) => Multiplayer::Some,
+                (false, None) => Multiplayer::None,
+            };
+            online_pvp = match multiplayer.onlinemax {
+                Some(0) => Multiplayer::None,
+                Some(max) => Multiplayer::Limited(max),
+                None => Multiplayer::None,
+            };
+        }
+        None => {
+            has_coop_campaign = false;
+            offline_coop = if game_modes.contains(&GAME_MODE_COOP) {
+                Multiplayer::Some
+            } else {
+                Multiplayer::None
+            };
+            offline_pvp = if game_modes.contains(&GAME_MODE_MULTIPLAYER) {
+                Multiplayer::Some
+            } else {
+                Multiplayer::None
+            };
+            online_coop = Multiplayer::None;
+            online_pvp = Multiplayer::None;
+        }
+    }
 
     let search_names = {
         let alternative_names: Vec<String> = igdb
@@ -123,15 +186,12 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
         }),
         genres: igdb.genres.unwrap_or_default(),
         themes: igdb.themes.unwrap_or_default(),
-        game_modes: igdb.game_modes.unwrap_or_default(),
-        max_players_offline: pc_multiplayer
-            .as_ref()
-            .and_then(|mode| mode.offlinemax)
-            .unwrap_or(1),
-        max_players_online: pc_multiplayer
-            .as_ref()
-            .and_then(|mode| mode.onlinemax)
-            .unwrap_or(1),
+        has_coop_campaign,
+        has_single_player,
+        offline_coop,
+        offline_pvp,
+        online_coop,
+        online_pvp,
         summary: igdb.summary,
         videos: igdb
             .videos
