@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use ureq::get;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -66,14 +67,21 @@ pub struct Game {
     pub id: u64,
     pub slug: String,
     pub name: String,
-    pub alternative_names: Option<Vec<AlternativeName>>,
+    #[serde(default)]
+    pub alternative_names: Vec<AlternativeName>,
     pub updated_at: u64,
     pub summary: Option<String>,
     pub cover: Option<Cover>,
-    pub game_modes: Option<Vec<u64>>,
-    pub genres: Option<Vec<u64>>,
-    pub themes: Option<Vec<u64>>,
-    pub multiplayer_modes: Option<Vec<MultiplayerMode>>,
+    #[serde(default)]
+    pub game_modes: Vec<u64>,
+    #[serde(default)]
+    pub genres: Vec<u64>,
+    #[serde(default)]
+    pub themes: Vec<u64>,
+    #[serde(default)]
+    pub keywords: HashSet<u64>,
+    #[serde(default)]
+    pub multiplayer_modes: Vec<MultiplayerMode>,
     pub screenshots: Option<Vec<Screenshot>>,
     pub videos: Option<Vec<Video>>,
 }
@@ -118,6 +126,7 @@ where
             "game_modes",
             "genres",
             "themes",
+            "keywords",
             "alternative_names.name",
         ];
         let query = format!(

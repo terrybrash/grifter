@@ -62,6 +62,12 @@ pub enum Multiplayer {
 }
 
 #[derive(Debug, Serialize, Clone)]
+pub enum Graphics {
+    Pixelated,
+    Smooth,
+}
+
+#[derive(Debug, Serialize, Clone)]
 pub struct Game {
     // INFO
     pub name: String,
@@ -79,6 +85,7 @@ pub struct Game {
     pub online_pvp: Multiplayer,
     pub screenshots: Vec<String>,
     pub videos: Vec<String>,
+    pub graphics: Graphics,
 
     // DISTRIBUTION
     pub path: PathBuf,
@@ -88,17 +95,15 @@ pub struct Game {
 
 fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -> Game {
     const PLATFORM_WINDOWS: u64 = 6;
-    let pc_multiplayer = igdb.multiplayer_modes.and_then(|modes| {
-        modes
-            .into_iter()
-            .find(|mode| mode.platform == Some(PLATFORM_WINDOWS) || mode.platform == None)
-    });
+    let pc_multiplayer = igdb
+        .multiplayer_modes
+        .iter()
+        .find(|mode| mode.platform == Some(PLATFORM_WINDOWS) || mode.platform == None);
 
     const GAME_MODE_SINGLE_PLAYER: u64 = 1;
     const GAME_MODE_MULTIPLAYER: u64 = 2;
     const GAME_MODE_COOP: u64 = 3;
-    let game_modes = igdb.game_modes.unwrap_or_default();
-    let has_single_player = game_modes.contains(&GAME_MODE_SINGLE_PLAYER);
+    let has_single_player = igdb.game_modes.contains(&GAME_MODE_SINGLE_PLAYER);
     let has_coop_campaign;
     let offline_coop;
     let offline_pvp;
@@ -132,12 +137,12 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
         }
         None => {
             has_coop_campaign = false;
-            offline_coop = if game_modes.contains(&GAME_MODE_COOP) {
+            offline_coop = if igdb.game_modes.contains(&GAME_MODE_COOP) {
                 Multiplayer::Some
             } else {
                 Multiplayer::None
             };
-            offline_pvp = if game_modes.contains(&GAME_MODE_MULTIPLAYER) {
+            offline_pvp = if igdb.game_modes.contains(&GAME_MODE_MULTIPLAYER) {
                 Multiplayer::Some
             } else {
                 Multiplayer::None
@@ -147,11 +152,30 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
         }
     }
 
+    const PIXEL_ART_KEYWORDS: [u64; 6] = [
+        891,   // pixel
+        1263,  // pixelated
+        1705,  // pixel-art
+        1780,  // pixel-graphics
+        1952,  // pixels
+        16700, // pixelart
+    ];
+    let keywords = igdb.keywords;
+    let has_pixel_art_keyword = PIXEL_ART_KEYWORDS
+        .iter()
+        .any(|keyword| keywords.contains(keyword));
+    let graphics = if has_pixel_art_keyword {
+        Graphics::Pixelated
+    } else {
+        Graphics::Smooth
+    };
+
     let search_names = {
         let alternative_names: Vec<String> = igdb
             .alternative_names
-            .map(|names| names.iter().map(|n| n.name.clone()).collect())
-            .unwrap_or_default();
+            .iter()
+            .map(|n| n.name.clone())
+            .collect();
         let is_alphanumeric = |c: &char| "abcdefghijklmnopqrstuvwxyz1234567890 ".contains(*c);
         std::iter::once(igdb.name.clone())
             .chain(alternative_names)
@@ -184,8 +208,8 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
                 cover.image_id
             )
         }),
-        genres: igdb.genres.unwrap_or_default(),
-        themes: igdb.themes.unwrap_or_default(),
+        genres: igdb.genres,
+        themes: igdb.themes,
         has_coop_campaign,
         has_single_player,
         offline_coop,
@@ -216,6 +240,7 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
                     .collect()
             })
             .unwrap_or_default(),
+        graphics,
 
         size_bytes: metadata.len(),
         version: {
