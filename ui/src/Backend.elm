@@ -1,4 +1,4 @@
-module Backend exposing (Catalog, Game, Genre, Graphics(..), Theme, getCatalog)
+module Backend exposing (Catalog, Game, Genre, Graphics(..), Multiplayer(..), Theme, getCatalog)
 
 import Http
 import Json.Decode as Decode exposing (Decoder, andThen, int, list, nullable, string)

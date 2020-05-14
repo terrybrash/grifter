@@ -179,7 +179,7 @@ view model =
 
         SingleGame ( catalog, game ) ->
             { title = "Grifter - " ++ game.name
-            , body = [ Page.SingleGame.view game ]
+            , body = [ Page.SingleGame.view catalog game]
             }
 
         LoadingFailed err ->
