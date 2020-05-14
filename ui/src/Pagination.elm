@@ -1,11 +1,11 @@
-module Pages exposing (Pages, count, current, fromList, next, previous)
+module Pagination exposing (Pagination, count, current, fromList, next, previous)
 
 
-type Pages i
+type Pagination i
     = Pages ( List i, i, List i )
 
 
-fromList : List i -> Maybe (Pages i)
+fromList : List i -> Maybe (Pagination i)
 fromList items =
     case items of
         head :: tail ->
@@ -15,7 +15,7 @@ fromList items =
             Nothing
 
 
-count : Pages i -> Int
+count : Pagination i -> Int
 count (Pages pages) =
     let
         ( prev, _, next_ ) =
@@ -24,7 +24,7 @@ count (Pages pages) =
     List.length prev + 1 + List.length next_
 
 
-current : Pages i -> ( Int, i )
+current : Pagination i -> ( Int, i )
 current (Pages pages) =
     let
         ( prev, curr, _ ) =
@@ -33,7 +33,7 @@ current (Pages pages) =
     ( List.length prev, curr )
 
 
-next : Pages i -> Maybe (Pages i)
+next : Pagination i -> Maybe (Pagination i)
 next (Pages pages) =
     case pages of
         ( prev, curr, next_ :: rest ) ->
@@ -43,7 +43,7 @@ next (Pages pages) =
             Nothing
 
 
-previous : Pages i -> Maybe (Pages i)
+previous : Pagination i -> Maybe (Pagination i)
 previous (Pages pages) =
     case pages of
         ( prev :: rest, curr, next_ ) ->

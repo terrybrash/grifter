@@ -9,7 +9,7 @@ import Html.Styled.Attributes as Attr exposing (checked, css, href, placeholder,
 import Html.Styled.Events exposing (onCheck, onClick, onInput)
 import Html.Styled.Keyed as Keyed
 import Http
-import Pages exposing (Pages)
+import Pagination exposing (Pagination)
 import Set exposing (Set)
 import Task
 import Url
@@ -28,7 +28,7 @@ main =
 
 type alias Model =
     { allGames : List Game
-    , games : Maybe (Pages (List Game))
+    , games : Maybe (Pagination (List Game))
     , genres : List Genre
     , search : String
     , filteredGenres : Set Int
@@ -40,8 +40,8 @@ type Msg
     = NoOp
     | GotGames (Result Http.Error (List Game))
     | GotGenres (Result Http.Error (List Genre))
-    | NextPage (Pages (List Game))
-    | PrevPage (Pages (List Game))
+    | NextPage (Pagination (List Game))
+    | PrevPage (Pagination (List Game))
     | Search String
     | FilterGenre ( Int, Bool )
 
@@ -73,7 +73,7 @@ update msg model =
         GotGames (Ok games) ->
             ( { model
                 | allGames = games
-                , games = Pages.fromList (chunk gamesPerPage games)
+                , games = Pagination.fromList (chunk gamesPerPage games)
                 , search = ""
               }
             , Cmd.none
@@ -102,7 +102,7 @@ update msg model =
                 games =
                     filterGames search model.filteredGenres model.allGames
             in
-            ( { model | games = Pages.fromList (chunk gamesPerPage games), search = search }, Cmd.none )
+            ( { model | games = Pagination.fromList (chunk gamesPerPage games), search = search }, Cmd.none )
 
         FilterGenre ( id, isFiltered ) ->
             let
@@ -116,7 +116,7 @@ update msg model =
                 games =
                     filterGames model.search filteredGenres model.allGames
             in
-            ( { model | games = Pages.fromList (chunk gamesPerPage games), filteredGenres = filteredGenres }, Cmd.none )
+            ( { model | games = Pagination.fromList (chunk gamesPerPage games), filteredGenres = filteredGenres }, Cmd.none )
 
         NoOp ->
             ( model, Cmd.none )
@@ -184,7 +184,7 @@ view model =
         ]
 
 
-viewPaginator : Pages (List Game) -> Html Msg
+viewPaginator : Pagination (List Game) -> Html Msg
 viewPaginator games =
     let
         styleButton =
@@ -201,7 +201,7 @@ viewPaginator games =
             ]
 
         attrNext =
-            case Pages.next games of
+            case Pagination.next games of
                 Just next ->
                     [ css styleButton, onClick (NextPage next) ]
 
@@ -209,7 +209,7 @@ viewPaginator games =
                     [ css styleButton, Attr.disabled True ]
 
         attrPrev =
-            case Pages.previous games of
+            case Pagination.previous games of
                 Just prev ->
                     [ css styleButton, onClick (PrevPage prev) ]
 
@@ -217,10 +217,10 @@ viewPaginator games =
                     [ css styleButton, Attr.disabled True ]
 
         ( current, _ ) =
-            Pages.current games
+            Pagination.current games
 
         total =
-            Pages.count games
+            Pagination.count games
     in
     div [ css [ textAlign center ] ]
         [ button attrPrev [ text "❮" ]
@@ -335,7 +335,7 @@ viewFilterGroup title options =
 -- GAMES --
 
 
-viewGames : Pages (List Game) -> Html Msg
+viewGames : Pagination (List Game) -> Html Msg
 viewGames games =
     Keyed.node "div"
         [ css
@@ -344,7 +344,7 @@ viewGames games =
             , property "align-content" "flex-start"
             ]
         ]
-        (games |> Pages.current |> Tuple.second |> List.map viewKeyedGame)
+        (games |> Pagination.current |> Tuple.second |> List.map viewKeyedGame)
 
 
 viewKeyedGame : Game -> ( String, Html Msg )
