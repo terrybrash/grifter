@@ -5,7 +5,7 @@ import Browser exposing (UrlRequest)
 import Html.Styled.Attributes exposing (rel, href)
 import Html.Styled exposing (Html, toUnstyled, node)
 import Http
-import Pages.Explore exposing (Msg(..))
+import Page.Explore exposing (Msg(..))
 import Shared
 import Url exposing (Url)
 import Url.Builder exposing (Root(..))
@@ -28,7 +28,7 @@ type Msg
     | GotGenres (Result Http.Error (List Genre))
     | ClickedLink UrlRequest
     | ChangedUrl Url
-    | ExploreMsg Pages.Explore.Msg
+    | ExploreMsg Page.Explore.Msg
 
 
 type alias Model =
@@ -38,7 +38,8 @@ type alias Model =
 
 
 type Page
-    = Explore Pages.Explore.Model
+    = Explore Page.Explore.Model
+    | Focus Game
 
 
 root : Root
@@ -49,7 +50,7 @@ root =
 init : flags -> url -> key -> ( Model, Cmd Msg )
 init _ _ _ =
     ( { shared = { games = [], genres = [] }
-      , page = Explore Pages.Explore.init
+      , page = Explore Page.Explore.init
       }
     , Cmd.batch
         [ getGames GotGames root
@@ -61,32 +62,32 @@ init _ _ _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model.page ) of
-        ( GotGames (Ok games), Explore exploreModel)->
+        ( GotGames (Ok games), Explore exploreModel ) ->
             let
                 ( newModel, cmd ) =
-                    Pages.Explore.update (Pages.Explore.GotGames games) exploreModel
+                    Page.Explore.update (Page.Explore.GotGames games) exploreModel
             in
-            ( { model | page = Explore newModel}, Cmd.map ExploreMsg cmd )
+            ( { model | page = Explore newModel }, Cmd.map ExploreMsg cmd )
 
         ( GotGames (Err _), _ ) ->
             ( model, Cmd.none )
 
-        ( GotGenres (Ok genres), Explore exploreModel) ->
+        ( GotGenres (Ok genres), Explore exploreModel ) ->
             let
                 ( newModel, cmd ) =
-                    Pages.Explore.update (Pages.Explore.GotGenres genres) exploreModel
+                    Page.Explore.update (Page.Explore.GotGenres genres) exploreModel
             in
-            ( { model | page = Explore newModel}, Cmd.map ExploreMsg cmd )
+            ( { model | page = Explore newModel }, Cmd.map ExploreMsg cmd )
 
         ( GotGenres (Err _), _ ) ->
             ( model, Cmd.none )
 
-        ( ExploreMsg exploreMsg, Explore exploreModel) ->
+        ( ExploreMsg exploreMsg, Explore exploreModel ) ->
             let
                 ( newModel, newCmd ) =
-                    Pages.Explore.update exploreMsg exploreModel 
+                    Page.Explore.update exploreMsg exploreModel
             in
-            ( { model | page = Explore newModel}, Cmd.map ExploreMsg newCmd )
+            ( { model | page = Explore newModel }, Cmd.map ExploreMsg newCmd )
 
         _ ->
             ( model, Cmd.none )
@@ -99,7 +100,15 @@ view model =
             { title = "Grifter"
             , body =
                 [ linkStylesheet "https://fonts.googleapis.com/css2?family=Manrope&display=swap"
-                , Pages.Explore.view exploreModel |> Html.Styled.map ExploreMsg
+                , Page.Explore.view exploreModel |> Html.Styled.map ExploreMsg
+                ]
+            }
+
+        Focus game ->
+            { title = "Grifter - " ++ game.name
+            , body =
+                [ linkStylesheet "https://fonts.googleapis.com/css2?family=Manrope&display=swap"
+                , Html.Styled.text game.name
                 ]
             }
 

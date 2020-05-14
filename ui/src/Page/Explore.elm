@@ -1,4 +1,4 @@
-module Pages.Explore exposing (Model, Msg(..), chunk, init, update, view)
+module Page.Explore exposing (Model, Msg(..), chunk, init, update, view)
 
 import Backend exposing (Game, Genre)
 import Browser.Dom
