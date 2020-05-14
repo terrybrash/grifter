@@ -4,6 +4,7 @@ import Backend
 import Css exposing (..)
 import Html.Styled as Html exposing (Html)
 import Html.Styled.Attributes as Attr exposing (css)
+import Shared exposing (white)
 import Url
 
 
@@ -13,8 +14,13 @@ view game =
         style =
             [ property "display" "grid"
             , property "grid-template-columns" "300px auto"
+            , property "grid-template-rows" "min-content"
             , property "grid-gap" "20px"
             , padding (px 20)
+            , backgroundColor Shared.background
+            , color white
+            , minHeight (vh 100)
+            , boxSizing borderBox
             ]
     in
     Html.div [ css style ]
