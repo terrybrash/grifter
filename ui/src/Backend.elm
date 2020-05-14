@@ -1,4 +1,4 @@
-module Backend exposing (Game, Genre, Theme, getGames, getGenres, getThemes)
+module Backend exposing (Catalog, Game, Genre, Theme, getCatalog)
 
 import Http
 import Json.Decode as Decode exposing (Decoder, andThen, int, list, nullable, string)
@@ -12,32 +12,31 @@ import Url.Builder exposing (Root)
 -- HTTP API --
 
 
-getGames : (Result Http.Error (List Game) -> msg) -> Root -> Cmd msg
-getGames msg root =
+getCatalog : (Result Http.Error Catalog -> msg) -> Root -> Cmd msg
+getCatalog msg root =
     Http.get
-        { url = Url.Builder.custom root [ "games" ] [] Nothing
-        , expect = Http.expectJson msg (list decodeGame)
-        }
-
-
-getThemes : (Result Http.Error (List Theme) -> msg) -> Root -> Cmd msg
-getThemes msg root =
-    Http.get
-        { url = Url.Builder.custom root [ "themes" ] [] Nothing
-        , expect = Http.expectJson msg (list decodeTheme)
-        }
-
-
-getGenres : (Result Http.Error (List Genre) -> msg) -> Root -> Cmd msg
-getGenres msg root =
-    Http.get
-        { url = Url.Builder.custom root [ "genres" ] [] Nothing
-        , expect = Http.expectJson msg (list decodeGenre)
+        { url = Url.Builder.custom root [ "catalog" ] [] Nothing
+        , expect = Http.expectJson msg decodeCatalog
         }
 
 
 
 -- MODELS --
+
+
+type alias Catalog =
+    { games : List Game
+    , genres : List Genre
+    , themes : List Theme
+    }
+
+
+decodeCatalog : Decoder Catalog
+decodeCatalog =
+    Decode.succeed Catalog
+        |> required "games" (list decodeGame)
+        |> required "genres" (list decodeGenre)
+        |> required "themes" (list decodeTheme)
 
 
 type alias Game =
