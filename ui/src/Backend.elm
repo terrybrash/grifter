@@ -44,10 +44,17 @@ type alias Game =
     , slug : String
     , searchNames : List String
     , cover : Maybe Url
+    , summary : Maybe String
     , genres : Set Int
     , themes : Set Int
-    , gameModes : List Int
-    , players : Int
+    , hasSinglePlayer : Bool
+    , hasCoopCampaign : Bool
+    , offlineCoop : Multiplayer
+    , offlinePvp : Multiplayer
+    , onlineCoop : Multiplayer
+    , onlinePvp : Multiplayer
+    , screenshots : List String
+    , videos : List String
     , path : String
     , sizeBytes : Int
     , version : Maybe String
@@ -61,10 +68,17 @@ decodeGame =
         |> required "slug" string
         |> required "search_names" (list string)
         |> required "cover" (nullable decodeUrl)
+        |> required "summary" (nullable string)
         |> required "genres" (decodeSet int)
         |> required "themes" (decodeSet int)
-        |> required "game_modes" (list int)
-        |> required "max_players_offline" int
+        |> required "has_single_player" Decode.bool
+        |> required "has_coop_campaign" Decode.bool
+        |> required "offline_coop" decodeMultiplayer
+        |> required "offline_pvp" decodeMultiplayer
+        |> required "online_coop" decodeMultiplayer
+        |> required "online_pvp" decodeMultiplayer
+        |> required "screenshots" (list string)
+        |> required "videos" (list string)
         |> required "path" string
         |> required "size_bytes" int
         |> required "version" (nullable string)
@@ -98,6 +112,32 @@ decodeGenre =
         |> required "id" int
         |> required "name" string
         |> required "slug" string
+
+
+type Multiplayer
+    = None
+    | Some
+    | Limit Int
+
+
+decodeMultiplayer : Decoder Multiplayer
+decodeMultiplayer =
+    Decode.oneOf
+        [ Decode.andThen
+            (\s ->
+                case s of
+                    "None" ->
+                        Decode.succeed None
+
+                    "Some" ->
+                        Decode.succeed Some
+
+                    _ ->
+                        Decode.fail "Expected \"None\" or \"Some\""
+            )
+            string
+        , Decode.map Limit (Decode.field "Limited" int)
+        ]
 
 
 
