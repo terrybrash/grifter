@@ -1,4 +1,4 @@
-module Backend exposing (Catalog, Game, Genre, Theme, getCatalog)
+module Backend exposing (Catalog, Game, Genre, Graphics(..), Theme, getCatalog)
 
 import Http
 import Json.Decode as Decode exposing (Decoder, andThen, int, list, nullable, string)
@@ -55,6 +55,7 @@ type alias Game =
     , onlinePvp : Multiplayer
     , screenshots : List String
     , videos : List String
+    , graphics : Graphics
     , path : String
     , sizeBytes : Int
     , version : Maybe String
@@ -79,6 +80,7 @@ decodeGame =
         |> required "online_pvp" decodeMultiplayer
         |> required "screenshots" (list string)
         |> required "videos" (list string)
+        |> required "graphics" decodeGraphics
         |> required "path" string
         |> required "size_bytes" int
         |> required "version" (nullable string)
@@ -138,6 +140,28 @@ decodeMultiplayer =
             string
         , Decode.map Limit (Decode.field "Limited" int)
         ]
+
+
+type Graphics
+    = Pixelated
+    | Smooth
+
+
+decodeGraphics : Decoder Graphics
+decodeGraphics =
+    Decode.string
+        |> Decode.andThen
+            (\s ->
+                case s of
+                    "Pixelated" ->
+                        Decode.succeed Pixelated
+
+                    "Smooth" ->
+                        Decode.succeed Smooth
+
+                    other ->
+                        Decode.fail ("Invalid value " ++ other ++ " for Graphics")
+            )
 
 
 
