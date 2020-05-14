@@ -14,38 +14,32 @@ import Url
 import Url.Builder exposing (Root(..))
 
 
-type alias Model =
-    { allGames : List Game
-    , allGenres : List Genre
-    , games : Maybe (Pagination (List Game))
-    , search : String
-    , filteredGenres : Set Int
-    , game : Maybe Game
-    }
-
-
 type Msg
     = NoOp
-    | GotGames (List Game)
-    | GotGenres (List Genre)
     | NextPage (Pagination (List Game))
     | PrevPage (Pagination (List Game))
     | Search String
     | FilterGenre ( Int, Bool )
 
 
+type alias Model =
+    { catalog : Backend.Catalog
+    , games : Maybe (Pagination (List Game))
+    , search : String
+    , filteredGenres : Set Int
+    }
+
+
 
 -- INIT --
 
 
-init : Model
-init =
-    { allGames = []
-    , allGenres = []
-    , games = Nothing
+init : Backend.Catalog -> Model
+init catalog =
+    { catalog = catalog
+    , games = Pagination.fromList (chunk gamesPerPage catalog.games)
     , search = ""
     , filteredGenres = Set.empty
-    , game = Nothing
     }
 
 
@@ -56,12 +50,6 @@ init =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        GotGames games ->
-            ( { model | allGames = games, games = Pagination.fromList (chunk gamesPerPage games), search = "" }, Cmd.none )
-
-        GotGenres genres ->
-            ( { model | allGenres = genres, filteredGenres = Set.empty }, Cmd.none )
-
         NextPage next ->
             ( { model | games = Just next }, Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0) )
 
@@ -74,7 +62,7 @@ update msg model =
                     normalizeSearch rawSearch
 
                 games =
-                    filterGames search model.filteredGenres model.allGames
+                    filterGames search model.filteredGenres model.catalog.games
             in
             ( { model | games = Pagination.fromList (chunk gamesPerPage games), search = search }, Cmd.none )
 
@@ -88,7 +76,7 @@ update msg model =
                         Set.remove id model.filteredGenres
 
                 games =
-                    filterGames model.search filteredGenres model.allGames
+                    filterGames model.search filteredGenres model.catalog.games
             in
             ( { model | games = Pagination.fromList (chunk gamesPerPage games), filteredGenres = filteredGenres }, Cmd.none )
 
@@ -145,7 +133,7 @@ view model =
             , fontFamilies [ "Manrope", "sans-serif" ]
             ]
         ]
-        [ viewSidebar model.allGenres model.filteredGenres
+        [ viewSidebar model.catalog.genres model.filteredGenres
         , div [ css [ flexGrow (int 1) ] ]
             (case model.games of
                 Just games ->
