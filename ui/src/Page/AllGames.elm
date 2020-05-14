@@ -9,6 +9,7 @@ import Html.Styled.Events exposing (onCheck, onClick, onInput)
 import Html.Styled.Keyed as Keyed
 import Pagination exposing (Pagination)
 import Set exposing (Set)
+import Shared exposing (userSelectNone)
 import Task
 import Url
 import Url.Builder exposing (Root(..))
@@ -128,7 +129,7 @@ view model =
         [ css
             [ displayFlex
             , minHeight (vh 100)
-            , backgroundColor (hex "#212033")
+            , backgroundColor Shared.background
             , color (rgb 255 255 255)
             , fontFamilies [ "Manrope", "sans-serif" ]
             ]
@@ -204,7 +205,7 @@ viewSidebar genres filteredGenres =
             in
             viewFilter (\f -> FilterGenre ( genre.id, f )) genre.name isGenreFiltered
     in
-    div [ css [ backgroundColor (rgba 0 0 0 0.25), padding (px spacing) ] ]
+    div [ css [ backgroundColor (rgba 0 0 0 0.25), padding (px Shared.spacing) ] ]
         [ viewTitle
         , viewSearch
 
@@ -228,9 +229,9 @@ viewSearch =
         , css
             [ padding (px 11)
             , border unset
-            , backgroundColor white
+            , backgroundColor Shared.white
             , borderRadius (px 2)
-            , color black
+            , color Shared.black
             , fontSize inherit
             ]
         ]
@@ -249,10 +250,10 @@ viewFilter msg option isEnabled =
             , lineHeight (num 1.7)
 
             -- Stretch the label across the entire sidebar.
-            , marginLeft (px -spacing)
-            , marginRight (px -spacing)
-            , paddingLeft (px spacing)
-            , paddingRight (px spacing)
+            , marginLeft (px -Shared.spacing)
+            , marginRight (px -Shared.spacing)
+            , paddingLeft (px Shared.spacing)
+            , paddingRight (px Shared.spacing)
             ]
     in
     label [ css styleLabel ]
@@ -268,15 +269,15 @@ checkbox attributes =
          , css
             [ verticalAlign middle
             , property "-webkit-appearance" "none"
-            , backgroundColor black
+            , backgroundColor Shared.black
             , width (px 12)
             , height (px 12)
-            , border3 (px 1) solid white
+            , border3 (px 1) solid Shared.white
             , borderRadius (px 2)
             , cursor inherit
             , margin4 (px 0) (px 7) (px 0) (px 0)
             , Css.checked
-                [ backgroundColor white
+                [ backgroundColor Shared.white
                 , border unset
                 , marginLeft (px 10)
                 ]
@@ -289,7 +290,7 @@ checkbox attributes =
 
 viewFilterGroup : String -> List (Html msg) -> Html msg
 viewFilterGroup title options =
-    div [ css [ marginTop (px spacing), marginBottom (px spacing) ] ] (text title :: options)
+    div [ css [ marginTop (px Shared.spacing), marginBottom (px Shared.spacing) ] ] (text title :: options)
 
 
 
@@ -343,8 +344,8 @@ viewGame game =
             [ width (px 150)
             , height (px 200)
             , position relative
-            , marginTop (px spacing)
-            , marginLeft (px spacing)
+            , marginTop (px Shared.spacing)
+            , marginLeft (px Shared.spacing)
             , cursor pointer
             , borderRadius (px 2)
             , overflow hidden
@@ -393,38 +394,3 @@ chunk size items =
 gamesPerPage : Int
 gamesPerPage =
     30
-
-
-spacing : Float
-spacing =
-    14
-
-
-accent : Color
-accent =
-    hex "#522ace"
-
-
-accent2 : Color
-accent2 =
-    hex "#9744E9"
-
-
-white : Color
-white =
-    rgb 255 255 255
-
-
-black : Color
-black =
-    rgb 0 0 0
-
-
-userSelectNone : Style
-userSelectNone =
-    property "user-select" "none"
-
-
-root : Root
-root =
-    CrossOrigin "http://192.168.1.197:9090"
