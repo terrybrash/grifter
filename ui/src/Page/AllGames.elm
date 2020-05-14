@@ -1,9 +1,9 @@
-module Page.Explore exposing (Model, Msg(..), chunk, init, update, view)
+module Page.AllGames exposing (Model, Msg(..), chunk, init, update, view)
 
 import Backend exposing (Game, Genre)
 import Browser.Dom
 import Css exposing (..)
-import Html.Styled exposing (Html, Attribute, div, h3, span, text, button, h1, input, label, img, a)
+import Html.Styled exposing (Attribute, Html, a, button, div, h1, h3, img, input, label, span, text)
 import Html.Styled.Attributes as Attr exposing (checked, css, href, placeholder, rel, src, type_)
 import Html.Styled.Events exposing (onCheck, onClick, onInput)
 import Html.Styled.Keyed as Keyed
@@ -350,7 +350,7 @@ viewGame game =
             ]
     in
     a
-        [ href (Url.Builder.custom root [ game.path ] [] Nothing)
+        [ href ("/games/" ++ game.slug) --(Url.Builder.custom root [ game.path ] [] Nothing)
         , css
             [ width (px 150)
             , height (px 200)
