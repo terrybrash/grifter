@@ -21,13 +21,25 @@ type Msg
     | PrevPage (Pagination (List Game))
     | Search String
     | FilterGenre ( Int, Bool )
+    | FilterSinglePlayer Bool
+    | FilterCoopCampaign Bool
+    | FilterOfflineCoop Bool
+    | FilterOfflinePvp Bool
+    | FilterOnlineCoop Bool
+    | FilterOnlinePvp Bool
 
 
 type alias Model =
     { catalog : Backend.Catalog
     , games : Maybe (Pagination (List Game))
     , search : String
-    , filteredGenres : Set Int
+    , mustHaveGenres : Set Int
+    , mustHaveSinglePlayer : Bool
+    , mustHaveCoopCampaign : Bool
+    , mustHaveOfflineCoop : Bool
+    , mustHaveOfflinePvp : Bool
+    , mustHaveOnlineCoop : Bool
+    , mustHaveOnlinePvp : Bool
     }
 
 
@@ -40,7 +52,13 @@ init catalog =
     { catalog = catalog
     , games = Pagination.fromList (chunk gamesPerPage catalog.games)
     , search = ""
-    , filteredGenres = Set.empty
+    , mustHaveGenres = Set.empty
+    , mustHaveSinglePlayer = False
+    , mustHaveCoopCampaign = False
+    , mustHaveOfflinePvp = False
+    , mustHaveOfflineCoop = False
+    , mustHaveOnlinePvp = False
+    , mustHaveOnlineCoop = False
     }
 
 
@@ -58,28 +76,36 @@ update msg model =
             ( { model | games = Just prev }, Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0) )
 
         Search rawSearch ->
-            let
-                search =
-                    normalizeSearch rawSearch
-
-                games =
-                    filterGames search model.filteredGenres model.catalog.games
-            in
-            ( { model | games = Pagination.fromList (chunk gamesPerPage games), search = search }, Cmd.none )
+            ( filterGames { model | search = normalizeSearch rawSearch }, Cmd.none )
 
         FilterGenre ( id, isFiltered ) ->
             let
-                filteredGenres =
+                mustHaveGenres =
                     if isFiltered then
-                        Set.insert id model.filteredGenres
+                        Set.insert id model.mustHaveGenres
 
                     else
-                        Set.remove id model.filteredGenres
-
-                games =
-                    filterGames model.search filteredGenres model.catalog.games
+                        Set.remove id model.mustHaveGenres
             in
-            ( { model | games = Pagination.fromList (chunk gamesPerPage games), filteredGenres = filteredGenres }, Cmd.none )
+            ( filterGames { model | mustHaveGenres = mustHaveGenres }, Cmd.none )
+
+        FilterSinglePlayer mustHave ->
+            ( filterGames { model | mustHaveSinglePlayer = mustHave }, Cmd.none )
+
+        FilterCoopCampaign mustHave ->
+            ( filterGames { model | mustHaveCoopCampaign = mustHave }, Cmd.none )
+
+        FilterOfflineCoop mustHave ->
+            ( filterGames { model | mustHaveOfflineCoop = mustHave }, Cmd.none )
+
+        FilterOfflinePvp mustHave ->
+            ( filterGames { model | mustHaveOfflinePvp = mustHave }, Cmd.none )
+
+        FilterOnlineCoop mustHave ->
+            ( filterGames { model | mustHaveOnlineCoop = mustHave }, Cmd.none )
+
+        FilterOnlinePvp mustHave ->
+            ( filterGames { model | mustHaveOnlinePvp = mustHave }, Cmd.none )
 
         NoOp ->
             ( model, Cmd.none )
@@ -105,18 +131,45 @@ normalizeSearch =
         >> String.foldl removeConsecutiveSpaces ""
 
 
-filterGames : String -> Set Int -> List Game -> List Game
-filterGames search genres games =
+filterGames : Model -> Model
+filterGames model =
     let
         containsSearch game =
-            List.any (String.contains search) game.searchNames
+            List.any (String.contains model.search) game.searchNames
 
         containsGenres game =
-            Set.size (Set.intersect game.genres genres) == Set.size genres
+            Set.size (Set.intersect game.genres model.mustHaveGenres) == Set.size model.mustHaveGenres
+
+        filterIf condition isGood =
+            if condition then
+                List.filter isGood
+
+            else
+                identity
+
+        isMultiplayer multiplayer =
+            case multiplayer of
+                Backend.Some ->
+                    True
+
+                Backend.Limit _ ->
+                    True
+
+                Backend.None ->
+                    False
+
+        games =
+            model.catalog.games
+                |> List.filter containsGenres
+                |> List.filter containsSearch
+                |> filterIf model.mustHaveSinglePlayer .hasSinglePlayer
+                |> filterIf model.mustHaveCoopCampaign .hasCoopCampaign
+                |> filterIf model.mustHaveOfflineCoop (.offlineCoop >> isMultiplayer)
+                |> filterIf model.mustHaveOfflinePvp (.offlinePvp >> isMultiplayer)
+                |> filterIf model.mustHaveOnlineCoop (.onlineCoop >> isMultiplayer)
+                |> filterIf model.mustHaveOnlinePvp (.onlinePvp >> isMultiplayer)
     in
-    games
-        |> List.filter containsGenres
-        |> List.filter containsSearch
+    { model | games = Pagination.fromList (chunk gamesPerPage games) }
 
 
 
@@ -134,7 +187,7 @@ view model =
             , fontFamilies [ "Manrope", "sans-serif" ]
             ]
         ]
-        [ viewSidebar model.catalog.genres model.filteredGenres
+        [ viewSidebar model
         , div [ css [ flexGrow (int 1) ] ]
             (case model.games of
                 Just games ->
@@ -195,23 +248,29 @@ viewPaginator games =
 -- SIDEBAR --
 
 
-viewSidebar : List Genre -> Set Int -> Html Msg
-viewSidebar genres filteredGenres =
+viewSidebar : Model -> Html Msg
+viewSidebar model =
     let
         viewGenreFilter genre =
             let
                 isGenreFiltered =
-                    Set.member genre.id filteredGenres
+                    Set.member genre.id model.mustHaveGenres
             in
             viewFilter (\f -> FilterGenre ( genre.id, f )) genre.name isGenreFiltered
     in
     div [ css [ backgroundColor (rgba 0 0 0 0.25), padding (px Shared.spacing) ] ]
         [ viewTitle
         , viewSearch
-
-        -- , viewFilterGroup "Players" [ "Single Player", "2–4 Players Online", "2–4 Players Local", "5–16 Players Online", "5–16 Players Local" ]
-        -- , viewFilterGroup "Input" [ "Mouse & Keyboard", "Gamepad" ]
-        , viewFilterGroup "Genres" (List.map viewGenreFilter genres)
+        , viewFilterGroup
+            "Multiplayer"
+            [ viewFilter FilterCoopCampaign "Co-op Campaign" model.mustHaveCoopCampaign
+            , viewFilter FilterOfflineCoop "Offline Co-op" model.mustHaveOfflineCoop
+            , viewFilter FilterOfflinePvp "Offline PvP" model.mustHaveOfflinePvp
+            , viewFilter FilterOnlineCoop "Online Co-op" model.mustHaveOnlineCoop
+            , viewFilter FilterOnlinePvp "Online PvP" model.mustHaveOnlinePvp
+            , viewFilter FilterSinglePlayer "Single Player" model.mustHaveSinglePlayer
+            ]
+        , viewFilterGroup "Genres" (List.map viewGenreFilter model.catalog.genres)
         ]
 
 
