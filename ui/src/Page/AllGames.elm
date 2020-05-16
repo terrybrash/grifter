@@ -398,6 +398,7 @@ viewGame game =
     in
     a
         [ href ("/games/" ++ game.slug) --(Url.Builder.custom root [ game.path ] [] Nothing)
+        , Attr.title game.name
         , css
             [ width (px 150)
             , height (px 200)
