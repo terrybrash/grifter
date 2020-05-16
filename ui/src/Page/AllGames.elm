@@ -32,6 +32,7 @@ type Msg
 type alias Model =
     { games : Maybe (Pagination (List Game))
     , search : String
+    , normalizedSearch : NormalizedSearch
     , mustHaveGenres : Set Int
     , mustHaveSinglePlayer : Bool
     , mustHaveCoopCampaign : Bool
@@ -40,6 +41,10 @@ type alias Model =
     , mustHaveOnlineCoop : Bool
     , mustHaveOnlinePvp : Bool
     }
+
+
+type NormalizedSearch
+    = NormalizedSearch String
 
 
 
@@ -51,6 +56,7 @@ init catalog =
     filterGames catalog
         { games = Nothing
         , search = ""
+        , normalizedSearch = NormalizedSearch ""
         , mustHaveGenres = Set.empty
         , mustHaveSinglePlayer = False
         , mustHaveCoopCampaign = False
@@ -74,8 +80,10 @@ update catalog msg model =
         PrevPage prev ->
             ( { model | games = Just prev }, Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0) )
 
-        Search rawSearch ->
-            ( filterGames catalog { model | search = normalizeSearch rawSearch }, Cmd.none )
+        Search search ->
+            ( filterGames catalog { model | search = search, normalizedSearch = normalizeSearch search }
+            , Cmd.none
+            )
 
         FilterGenre ( id, isFiltered ) ->
             let
@@ -110,7 +118,7 @@ update catalog msg model =
             ( model, Cmd.none )
 
 
-normalizeSearch : String -> String
+normalizeSearch : String -> NormalizedSearch
 normalizeSearch =
     let
         isSearchable char =
@@ -128,13 +136,16 @@ normalizeSearch =
         >> String.filter isSearchable
         >> String.trim
         >> String.foldl removeConsecutiveSpaces ""
+        >> NormalizedSearch
 
 
 filterGames : Backend.Catalog -> Model -> Model
 filterGames catalog model =
     let
         containsSearch game =
-            List.any (String.contains model.search) game.searchNames
+            case model.normalizedSearch of
+                NormalizedSearch search ->
+                    List.any (String.contains search) game.searchNames
 
         containsGenres game =
             Set.size (Set.intersect game.genres model.mustHaveGenres) == Set.size model.mustHaveGenres
@@ -259,7 +270,7 @@ viewSidebar catalog model =
     in
     div [ css [ backgroundColor (rgba 0 0 0 0.25), padding (px Shared.spacing) ] ]
         [ viewTitle
-        , viewSearch
+        , viewSearch model.search
         , viewFilterGroup
             "Multiplayer"
             [ viewFilter FilterCoopCampaign "Co-op Campaign" model.mustHaveCoopCampaign
@@ -278,12 +289,13 @@ viewTitle =
     h1 [] [ text "Grifter" ]
 
 
-viewSearch : Html Msg
-viewSearch =
+viewSearch : String -> Html Msg
+viewSearch search =
     input
         [ type_ "search"
         , placeholder "Search..."
         , onInput Search
+        , Attr.value search
         , css
             [ padding (px 11)
             , border unset
@@ -381,6 +393,7 @@ viewGame game =
             , width (pct 100)
             , padding4 (px 10) (px 7) (px 5) (px 7)
             , boxSizing borderBox
+            , color Shared.white
             ]
 
         styleHighlight =

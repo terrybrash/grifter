@@ -8,6 +8,7 @@ import Html.Styled.Attributes exposing (href, rel)
 import Http
 import Page.AllGames exposing (Msg(..))
 import Page.SingleGame
+import Shared
 import Url exposing (Url)
 import Url.Builder exposing (Root(..))
 import Url.Parser exposing ((</>))
@@ -61,7 +62,7 @@ init _ url key =
             ( NotFound, Cmd.none )
 
         _ ->
-            ( Loading { key = key, route = route }, getCatalog GotCatalog root )
+            ( Loading { key = key, route = route }, getCatalog GotCatalog Shared.root )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -194,11 +195,6 @@ toUnstyledDocument document =
 linkStylesheet : String -> Html msg
 linkStylesheet src =
     node "link" [ rel "stylesheet", href src ] []
-
-
-root : Root
-root =
-    CrossOrigin "http://192.168.1.197:9090"
 
 
 
