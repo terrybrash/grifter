@@ -30,8 +30,7 @@ type Msg
 
 
 type alias Model =
-    { catalog : Backend.Catalog
-    , games : Maybe (Pagination (List Game))
+    { games : Maybe (Pagination (List Game))
     , search : String
     , mustHaveGenres : Set Int
     , mustHaveSinglePlayer : Bool
@@ -49,25 +48,25 @@ type alias Model =
 
 init : Backend.Catalog -> Model
 init catalog =
-    { catalog = catalog
-    , games = Pagination.fromList (chunk gamesPerPage catalog.games)
-    , search = ""
-    , mustHaveGenres = Set.empty
-    , mustHaveSinglePlayer = False
-    , mustHaveCoopCampaign = False
-    , mustHaveOfflinePvp = False
-    , mustHaveOfflineCoop = False
-    , mustHaveOnlinePvp = False
-    , mustHaveOnlineCoop = False
-    }
+    filterGames catalog
+        { games = Nothing
+        , search = ""
+        , mustHaveGenres = Set.empty
+        , mustHaveSinglePlayer = False
+        , mustHaveCoopCampaign = False
+        , mustHaveOfflinePvp = False
+        , mustHaveOfflineCoop = False
+        , mustHaveOnlinePvp = False
+        , mustHaveOnlineCoop = False
+        }
 
 
 
 -- UPDATE --
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
+update : Backend.Catalog -> Msg -> Model -> ( Model, Cmd Msg )
+update catalog msg model =
     case msg of
         NextPage next ->
             ( { model | games = Just next }, Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0) )
@@ -76,7 +75,7 @@ update msg model =
             ( { model | games = Just prev }, Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0) )
 
         Search rawSearch ->
-            ( filterGames { model | search = normalizeSearch rawSearch }, Cmd.none )
+            ( filterGames catalog { model | search = normalizeSearch rawSearch }, Cmd.none )
 
         FilterGenre ( id, isFiltered ) ->
             let
@@ -87,25 +86,25 @@ update msg model =
                     else
                         Set.remove id model.mustHaveGenres
             in
-            ( filterGames { model | mustHaveGenres = mustHaveGenres }, Cmd.none )
+            ( filterGames catalog { model | mustHaveGenres = mustHaveGenres }, Cmd.none )
 
         FilterSinglePlayer mustHave ->
-            ( filterGames { model | mustHaveSinglePlayer = mustHave }, Cmd.none )
+            ( filterGames catalog { model | mustHaveSinglePlayer = mustHave }, Cmd.none )
 
         FilterCoopCampaign mustHave ->
-            ( filterGames { model | mustHaveCoopCampaign = mustHave }, Cmd.none )
+            ( filterGames catalog { model | mustHaveCoopCampaign = mustHave }, Cmd.none )
 
         FilterOfflineCoop mustHave ->
-            ( filterGames { model | mustHaveOfflineCoop = mustHave }, Cmd.none )
+            ( filterGames catalog { model | mustHaveOfflineCoop = mustHave }, Cmd.none )
 
         FilterOfflinePvp mustHave ->
-            ( filterGames { model | mustHaveOfflinePvp = mustHave }, Cmd.none )
+            ( filterGames catalog { model | mustHaveOfflinePvp = mustHave }, Cmd.none )
 
         FilterOnlineCoop mustHave ->
-            ( filterGames { model | mustHaveOnlineCoop = mustHave }, Cmd.none )
+            ( filterGames catalog { model | mustHaveOnlineCoop = mustHave }, Cmd.none )
 
         FilterOnlinePvp mustHave ->
-            ( filterGames { model | mustHaveOnlinePvp = mustHave }, Cmd.none )
+            ( filterGames catalog { model | mustHaveOnlinePvp = mustHave }, Cmd.none )
 
         NoOp ->
             ( model, Cmd.none )
@@ -131,8 +130,8 @@ normalizeSearch =
         >> String.foldl removeConsecutiveSpaces ""
 
 
-filterGames : Model -> Model
-filterGames model =
+filterGames : Backend.Catalog -> Model -> Model
+filterGames catalog model =
     let
         containsSearch game =
             List.any (String.contains model.search) game.searchNames
@@ -159,7 +158,7 @@ filterGames model =
                     False
 
         games =
-            model.catalog.games
+            catalog.games
                 |> List.filter containsGenres
                 |> List.filter containsSearch
                 |> filterIf model.mustHaveSinglePlayer .hasSinglePlayer
@@ -176,8 +175,8 @@ filterGames model =
 -- VIEW --
 
 
-view : Model -> Html Msg
-view model =
+view : Backend.Catalog -> Model -> Html Msg
+view catalog model =
     div
         [ css
             [ displayFlex
@@ -187,7 +186,7 @@ view model =
             , fontFamilies [ "Manrope", "sans-serif" ]
             ]
         ]
-        [ viewSidebar model
+        [ viewSidebar catalog model
         , div [ css [ flexGrow (int 1) ] ]
             (case model.games of
                 Just games ->
@@ -248,8 +247,8 @@ viewPaginator games =
 -- SIDEBAR --
 
 
-viewSidebar : Model -> Html Msg
-viewSidebar model =
+viewSidebar : Backend.Catalog -> Model -> Html Msg
+viewSidebar catalog model =
     let
         viewGenreFilter genre =
             let
@@ -270,7 +269,7 @@ viewSidebar model =
             , viewFilter FilterOnlinePvp "Online PvP" model.mustHaveOnlinePvp
             , viewFilter FilterSinglePlayer "Single Player" model.mustHaveSinglePlayer
             ]
-        , viewFilterGroup "Genres" (List.map viewGenreFilter model.catalog.genres)
+        , viewFilterGroup "Genres" (List.map viewGenreFilter catalog.genres)
         ]
 
 

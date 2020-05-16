@@ -33,18 +33,21 @@ type Msg
 
 
 type Page
-    = AllGames Page.AllGames.Model
-    | SingleGame ( Catalog, Game )
-    | Loading
+    = AllGames
+    | SingleGame Game
+
+
+type Model
+    = Loading { key : Browser.Navigation.Key, route : Route }
     | LoadingFailed Http.Error
     | NotFound
-
-
-type alias Model =
-    { key : Browser.Navigation.Key
-    , page : Page
-    , route : Route
-    }
+    | Loaded
+        { key : Browser.Navigation.Key
+        , route : Route
+        , page : Page
+        , catalog : Catalog
+        , allGames : Page.AllGames.Model
+        }
 
 
 init : flags -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
@@ -53,97 +56,80 @@ init _ url key =
         route =
             routeFromUrl url
     in
-    ( { key = key
-      , route = route
-      , page =
-            case route of
-                Unknown ->
-                    NotFound
+    case route of
+        Unknown ->
+            ( NotFound, Cmd.none )
 
-                _ ->
-                    Loading
-      }
-    , getCatalog GotCatalog root
-    )
+        _ ->
+            ( Loading { key = key, route = route }, getCatalog GotCatalog root )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case ( msg, model.page ) of
-        ( GotCatalog result, _ ) ->
-            case result of
-                Ok catalog ->
-                    case model.route of
-                        Games ->
-                            ( { model | page = AllGames (Page.AllGames.init catalog) }, Cmd.none )
+    case ( msg, model ) of
+        ( GotCatalog (Ok catalog), Loading loading ) ->
+            case loading.route of
+                Games ->
+                    ( Loaded
+                        { key = loading.key
+                        , route = loading.route
+                        , page = AllGames
+                        , allGames = Page.AllGames.init catalog
+                        , catalog = catalog
+                        }
+                    , Cmd.none
+                    )
 
-                        Game slug ->
-                            case find (\g -> g.slug == slug) catalog.games of
-                                Just game ->
-                                    ( { model | page = SingleGame ( catalog, game ) }, Cmd.none )
+                Game slug ->
+                    case find (\g -> g.slug == slug) catalog.games of
+                        Just game ->
+                            ( Loaded
+                                { key = loading.key
+                                , route = loading.route
+                                , page = SingleGame game
+                                , allGames = Page.AllGames.init catalog
+                                , catalog = catalog
+                                }
+                            , Cmd.none
+                            )
 
-                                Nothing ->
-                                    ( { model | page = NotFound }, Cmd.none )
+                        Nothing ->
+                            ( NotFound, Cmd.none )
 
-                        Unknown ->
-                            ( model, Cmd.none )
+                Unknown ->
+                    ( NotFound, Cmd.none )
 
-                Err err ->
-                    ( { model | page = LoadingFailed err }, Cmd.none )
+        ( GotCatalog (Err err), Loading _ ) ->
+            ( LoadingFailed err, Cmd.none )
 
-        ( MsgAllGames msgAllGames, AllGames modelAllGames ) ->
+        ( MsgAllGames msg_, Loaded loaded ) ->
             let
                 ( newModel, cmd ) =
-                    Page.AllGames.update msgAllGames modelAllGames
+                    Page.AllGames.update loaded.catalog msg_ loaded.allGames
             in
-            ( { model | page = AllGames newModel }, Cmd.map MsgAllGames cmd )
+            ( Loaded { loaded | allGames = newModel }, Cmd.map MsgAllGames cmd )
+
+        ( ClickedLink (Browser.Internal url), Loaded loaded ) ->
+            ( model, Browser.Navigation.pushUrl loaded.key (Url.toString url) )
+
+        ( ChangedUrl url, Loaded loaded ) ->
+            case routeFromUrl url of
+                Game slug ->
+                    case find (\g -> g.slug == slug) loaded.catalog.games of
+                        Just game ->
+                            ( Loaded { loaded | page = SingleGame game }, Cmd.none )
+
+                        Nothing ->
+                            ( NotFound, Cmd.none )
+
+                Games ->
+                    ( Loaded { loaded | page = AllGames }, Cmd.none )
+
+                Unknown ->
+                    ( NotFound, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
-
-
-
--- case ( msg, model.page ) of
---     ( GotGames result, _ ) ->
---         ( { model | games = games, })
---     ( GotGames (Ok games), Explore exploreModel ) ->
---         let
---             ( newModel, cmd ) =
---                 Page.Explore.update (Page.Explore.GotGames games) exploreModel
---         in
---         ( { model | page = Explore newModel, shared = { games = games, genres = [] } }, Cmd.map ExploreMsg cmd )
---     ( GotGames (Err _), _ ) ->
---         ( model, Cmd.none )
---     ( GotGenres (Ok genres), Explore exploreModel ) ->
---         let
---             ( newModel, cmd ) =
---                 Page.Explore.update (Page.Explore.GotGenres genres) exploreModel
---         in
---         ( { model | page = Explore newModel }, Cmd.map ExploreMsg cmd )
---     ( GotGenres (Err _), _ ) ->
---         ( model, Cmd.none )
---     ( ExploreMsg exploreMsg, Explore exploreModel ) ->
---         let
---             ( newModel, newCmd ) =
---                 Page.Explore.update exploreMsg exploreModel
---         in
---         ( { model | page = Explore newModel }, Cmd.map ExploreMsg newCmd )
---     ( ClickedLink (Browser.Internal url), _ ) ->
---         ( model, Browser.Navigation.pushUrl model.key (Url.toString url) )
---     ( ChangedUrl url, _ ) ->
---         case Debug.log "test" (Url.Parser.parse routeParser url) of
---             Nothing ->
---                 ( model, Cmd.none )
---             Just Games ->
---                 ( { model | page = Explore Page.Explore.init }, Cmd.none )
---             Just (Game slug) ->
---                 case find (\g -> g.slug == slug) model.shared.games of
---                     Just game ->
---                         ( { model | page = Focus game }, Cmd.none )
---                     Nothing ->
---                         ( model, Cmd.none )
---     _ ->
---         ( model, Cmd.none )
 
 
 find : (a -> Bool) -> List a -> Maybe a
@@ -157,37 +143,8 @@ find isGood list =
 
 view : Model -> Document Msg
 view model =
-    case model.page of
-        -- ( Loaded catalog, Explore exploreModel ) ->
-        --     { title = "Grifter"
-        --     , body =
-        --         [ linkStylesheet "https://fonts.googleapis.com/css2?family=Manrope&display=swap"
-        --         , Page.Explore.view exploreModel |> Html.Styled.map ExploreMsg
-        --         ]
-        --     }
-        -- ( Loaded catalog, Focus game ) ->
-        --     { title = "Grifter - " ++ game.name
-        --     , body =
-        --         [ linkStylesheet "https://fonts.googleapis.com/css2?family=Manrope&display=swap"
-        --         , Html.Styled.text game.name
-        --         ]
-        --     }
-        AllGames modelAllGames ->
-            { title = "Grifter"
-            , body = [ Page.AllGames.view modelAllGames |> Html.Styled.map MsgAllGames ]
-            }
-
-        SingleGame ( catalog, game ) ->
-            { title = "Grifter - " ++ game.name
-            , body = [ Page.SingleGame.view catalog game]
-            }
-
-        LoadingFailed err ->
-            { title = "Grifter"
-            , body = [ Html.Styled.text "Failed to load data from the server. Try refreshing the page or contacting an admin." ]
-            }
-
-        Loading ->
+    case model of
+        Loading _ ->
             { title = "Grifter - Loading"
             , body = [ Html.Styled.text "Loading..." ]
             }
@@ -196,6 +153,29 @@ view model =
             { title = "Grifter - 404"
             , body = [ Html.Styled.text "Not found" ]
             }
+
+        LoadingFailed _ ->
+            { title = "Grifter"
+            , body = [ Html.Styled.text "Failed to load data from the server. Try refreshing the page or contacting an admin." ]
+            }
+
+        Loaded loaded ->
+            case loaded.page of
+                AllGames ->
+                    { title = "Grifter"
+                    , body =
+                        [ linkStylesheet "https://fonts.googleapis.com/css2?family=Manrope&display=swap"
+                        , Page.AllGames.view loaded.catalog loaded.allGames |> Html.Styled.map MsgAllGames
+                        ]
+                    }
+
+                SingleGame game ->
+                    { title = "Grifter - " ++ game.name
+                    , body =
+                        [ linkStylesheet "https://fonts.googleapis.com/css2?family=Manrope&display=swap"
+                        , Page.SingleGame.view loaded.catalog game
+                        ]
+                    }
 
 
 type alias Document msg =

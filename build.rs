@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     Command::new("elm")
         .current_dir("ui")
         .args(&["make", "src/Main.elm", "--optimize", "--output=elm.js"])
@@ -41,6 +40,7 @@ fn main() {
         </body>"##,
         elm
     );
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     std::fs::write(out_dir.join("index.html"), index).unwrap();
 
     // Cleanup
