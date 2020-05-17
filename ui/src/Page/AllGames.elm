@@ -1,11 +1,11 @@
 module Page.AllGames exposing (Model, Msg(..), chunk, init, update, view)
 
-import Backend exposing (Game, Genre)
+import Backend exposing (Game)
 import Browser.Dom
 import Css exposing (..)
 import Html.Styled exposing (Attribute, Html, a, button, div, h1, h3, img, input, label, span, text)
 import Html.Styled.Attributes as Attr exposing (checked, css, href, placeholder, rel, src, type_)
-import Html.Styled.Events exposing (onCheck, onClick, onInput)
+import Html.Styled.Events as Event
 import Html.Styled.Keyed as Keyed
 import Pagination exposing (Pagination)
 import Set exposing (Set)
@@ -27,12 +27,15 @@ type Msg
     | FilterOfflinePvp Bool
     | FilterOnlineCoop Bool
     | FilterOnlinePvp Bool
+    | KeyDown Shared.KeyboardEvent
+    | SearchFocused Bool
 
 
 type alias Model =
     { games : Maybe (Pagination (List Game))
     , search : String
     , normalizedSearch : NormalizedSearch
+    , isSearchFocused : Bool
     , mustHaveGenres : Set Int
     , mustHaveSinglePlayer : Bool
     , mustHaveCoopCampaign : Bool
@@ -48,7 +51,7 @@ type NormalizedSearch
 
 
 
--- INIT --
+-- INIT
 
 
 init : Backend.Catalog -> Model
@@ -57,6 +60,7 @@ init catalog =
         { games = Nothing
         , search = ""
         , normalizedSearch = NormalizedSearch ""
+        , isSearchFocused = False
         , mustHaveGenres = Set.empty
         , mustHaveSinglePlayer = False
         , mustHaveCoopCampaign = False
@@ -68,7 +72,7 @@ init catalog =
 
 
 
--- UPDATE --
+-- UPDATE
 
 
 update : Backend.Catalog -> Msg -> Model -> ( Model, Cmd Msg )
@@ -114,8 +118,32 @@ update catalog msg model =
         FilterOnlinePvp mustHave ->
             ( filterGames catalog { model | mustHaveOnlinePvp = mustHave }, Cmd.none )
 
+        KeyDown { key } ->
+            if not model.isSearchFocused && isSingleAlphaNum key then
+                ( filterGames catalog { model | search = key }, Task.attempt (\_ -> NoOp) (Browser.Dom.focus "search") )
+
+            else
+                ( model, Cmd.none )
+
+        SearchFocused isFocused ->
+            ( { model | isSearchFocused = isFocused }, Cmd.none )
+
         NoOp ->
             ( model, Cmd.none )
+
+
+isSingleAlphaNum : String -> Bool
+isSingleAlphaNum key =
+    if String.length key > 1 then
+        False
+
+    else
+        case String.toList key of
+            char :: _ ->
+                Char.isAlphaNum char
+
+            [] ->
+                False
 
 
 normalizeSearch : String -> NormalizedSearch
@@ -183,7 +211,7 @@ filterGames catalog model =
 
 
 
--- VIEW --
+-- VIEW
 
 
 view : Backend.Catalog -> Model -> Html Msg
@@ -228,7 +256,7 @@ viewPaginator games =
         attrNext =
             case Pagination.next games of
                 Just next ->
-                    [ css styleButton, onClick (NextPage next) ]
+                    [ css styleButton, Event.onClick (NextPage next) ]
 
                 Nothing ->
                     [ css styleButton, Attr.disabled True ]
@@ -236,7 +264,7 @@ viewPaginator games =
         attrPrev =
             case Pagination.previous games of
                 Just prev ->
-                    [ css styleButton, onClick (PrevPage prev) ]
+                    [ css styleButton, Event.onClick (PrevPage prev) ]
 
                 Nothing ->
                     [ css styleButton, Attr.disabled True ]
@@ -255,7 +283,7 @@ viewPaginator games =
 
 
 
--- SIDEBAR --
+-- SIDEBAR
 
 
 viewSidebar : Backend.Catalog -> Model -> Html Msg
@@ -292,9 +320,12 @@ viewTitle =
 viewSearch : String -> Html Msg
 viewSearch search =
     input
-        [ type_ "search"
+        [ Attr.id "search"
+        , type_ "search"
         , placeholder "Search..."
-        , onInput Search
+        , Event.onFocus (SearchFocused True)
+        , Event.onBlur (SearchFocused False)
+        , Event.onInput Search
         , Attr.value search
         , css
             [ padding (px 11)
@@ -327,7 +358,7 @@ viewFilter msg option isEnabled =
             ]
     in
     label [ css styleLabel ]
-        [ checkbox [ Attr.checked isEnabled, onCheck msg ]
+        [ checkbox [ Attr.checked isEnabled, Event.onCheck msg ]
         , text option
         ]
 
@@ -364,7 +395,7 @@ viewFilterGroup title options =
 
 
 
--- GAMES --
+-- GAMES
 
 
 viewGames : Pagination (List Game) -> Html Msg
@@ -444,7 +475,7 @@ viewGame game =
 
 
 
--- LIST --
+-- LIST
 
 
 chunk : Int -> List a -> List (List a)
@@ -460,7 +491,7 @@ chunk size items =
 
 
 
--- GLOBALS --
+-- GLOBALS
 
 
 gamesPerPage : Int

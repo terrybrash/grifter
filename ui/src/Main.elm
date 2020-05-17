@@ -20,7 +20,7 @@ main =
         { view = view >> toUnstyledDocument
         , update = update
         , init = init
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = \_ -> Shared.onKeyDown KeyDown
         , onUrlChange = ChangedUrl
         , onUrlRequest = ClickedLink
         }
@@ -31,6 +31,7 @@ type Msg
     | ClickedLink UrlRequest
     | ChangedUrl Url
     | MsgAllGames Page.AllGames.Msg
+    | KeyDown Shared.KeyboardEvent
 
 
 type Page
@@ -129,6 +130,14 @@ update msg model =
                 Unknown ->
                     ( NotFound, Cmd.none )
 
+        ( KeyDown event, Loaded loaded ) ->
+            case loaded.page of
+                AllGames ->
+                    update (MsgAllGames (Page.AllGames.KeyDown event)) model
+
+                _ ->
+                    ( model, Cmd.none )
+
         _ ->
             ( model, Cmd.none )
 
@@ -139,7 +148,7 @@ find isGood list =
 
 
 
--- VIEW --
+-- VIEW
 
 
 view : Model -> Document Msg
@@ -156,7 +165,7 @@ view model =
             }
 
         LoadingFailed _ ->
-            { title = "Grifter"
+            { title = "Grifter - 500"
             , body = [ Html.Styled.text "Failed to load data from the server. Try refreshing the page or contacting an admin." ]
             }
 
