@@ -62,8 +62,16 @@ init _ url key =
         Unknown ->
             ( NotFound, Cmd.none )
 
+        Index ->
+            ( Loading { key = key, route = route }
+            , Cmd.batch
+                [ getCatalog GotCatalog
+                , Browser.Navigation.replaceUrl key "games"
+                ]
+            )
+
         _ ->
-            ( Loading { key = key, route = route }, getCatalog GotCatalog Shared.root )
+            ( Loading { key = key, route = route }, getCatalog GotCatalog )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -98,6 +106,9 @@ update msg model =
                         Nothing ->
                             ( NotFound, Cmd.none )
 
+                Index ->
+                    update msg (Loading { loading | route = Games })
+
                 Unknown ->
                     ( NotFound, Cmd.none )
 
@@ -126,6 +137,9 @@ update msg model =
 
                 Games ->
                     ( Loaded { loaded | page = AllGames }, Cmd.none )
+
+                Index ->
+                    ( Loaded { loaded | page = AllGames }, Browser.Navigation.replaceUrl loaded.key "games" )
 
                 Unknown ->
                     ( NotFound, Cmd.none )
@@ -211,7 +225,8 @@ linkStylesheet src =
 
 
 type Route
-    = Games
+    = Index
+    | Games
     | Game String
     | Unknown
 
@@ -222,7 +237,8 @@ routeFromUrl url =
         route : Url.Parser.Parser (Route -> a) a
         route =
             Url.Parser.oneOf
-                [ Url.Parser.map Games (Url.Parser.s "games")
+                [ Url.Parser.map Index Url.Parser.top
+                , Url.Parser.map Games (Url.Parser.s "games")
                 , Url.Parser.map Game (Url.Parser.s "games" </> Url.Parser.string)
                 ]
     in

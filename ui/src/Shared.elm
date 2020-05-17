@@ -1,4 +1,4 @@
-module Shared exposing (KeyboardEvent, accent, accent2, background, black, onKeyDown, root, spacing, userSelectNone, white)
+module Shared exposing (KeyboardEvent, accent, accent2, background, black, onKeyDown, spacing, userSelectNone, white)
 
 import Browser.Events
 import Css exposing (Color, Style, hex, property, rgb)
@@ -44,11 +44,6 @@ black =
 userSelectNone : Style
 userSelectNone =
     property "user-select" "none"
-
-
-root : Root
-root =
-    CrossOrigin "http://192.168.1.197:9090"
 
 
 

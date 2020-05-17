@@ -15,6 +15,7 @@ use rocket_cors::{AllowedOrigins, CorsOptions};
 use serde::Serialize;
 use std::io;
 use std::io::Write;
+use std::path::PathBuf;
 
 pub fn gzip(bytes: Vec<u8>) -> io::Result<Vec<u8>> {
     let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::best());
@@ -65,8 +66,8 @@ pub fn start(config: &Config, games: Vec<Game>) {
     rocket::ignite()
         .attach(cors)
         .manage(model)
-        .mount("/games", StaticFiles::from(&config.root))
-        .mount("/", routes![get_index, get_catalog])
+        .mount("/", routes![get_index, get_anything, get_catalog])
+        .mount("/api/download", StaticFiles::from(&config.root).rank(-2))
         .launch();
 }
 
@@ -83,12 +84,17 @@ impl<'r, R: Responder<'r>> Responder<'r> for EncodedContent<R> {
     }
 }
 
-#[get("/catalog")]
-fn get_catalog(model: State<Model>) -> EncodedContent<Vec<u8>> {
-    EncodedContent(ContentType::JSON, Encoding::Gzip, model.catalog.clone())
-}
-
 #[get("/")]
 fn get_index(model: State<Model>) -> EncodedContent<Vec<u8>> {
     EncodedContent(ContentType::HTML, Encoding::Gzip, model.index.clone())
+}
+
+#[get("/<_path..>")]
+fn get_anything(_path: PathBuf, model: State<Model>) -> EncodedContent<Vec<u8>> {
+    get_index(model)
+}
+
+#[get("/api/catalog")]
+fn get_catalog(model: State<Model>) -> EncodedContent<Vec<u8>> {
+    EncodedContent(ContentType::JSON, Encoding::Gzip, model.catalog.clone())
 }

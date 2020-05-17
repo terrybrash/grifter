@@ -5,23 +5,22 @@ import Json.Decode as Decode exposing (Decoder, andThen, int, list, nullable, st
 import Json.Decode.Pipeline exposing (required)
 import Set exposing (Set)
 import Url exposing (Url)
-import Url.Builder exposing (Root)
 
 
 
--- HTTP API --
+-- HTTP API
 
 
-getCatalog : (Result Http.Error Catalog -> msg) -> Root -> Cmd msg
-getCatalog msg root =
+getCatalog : (Result Http.Error Catalog -> msg) -> Cmd msg
+getCatalog msg =
     Http.get
-        { url = Url.Builder.custom root [ "catalog" ] [] Nothing
+        { url = "/api/catalog"
         , expect = Http.expectJson msg decodeCatalog
         }
 
 
 
--- MODELS --
+-- MODELS
 
 
 type alias Catalog =
@@ -165,7 +164,7 @@ decodeGraphics =
 
 
 
--- UTILITIES --
+-- UTILITIES
 
 
 decodeUrl : Decoder Url
