@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,7 +9,7 @@ use std::path::{Path, PathBuf};
 pub enum Problem {
     ConflictingGames(Vec<Game>),
     MissingExe(Game),
-    UnusedExe(PathBuf),
+    UnusedExe(OsString),
 }
 
 impl fmt::Display for Problem {
@@ -48,10 +49,21 @@ impl Config {
         let mut config: Config =
             toml::from_str(&text).unwrap_or_else(|_| panic!("Parse {:?}", path.as_ref()));
 
-        // Check for missing or unusable root directory.
-        if !config.root.metadata()?.is_dir() {
-            return Err("Root is expected to be a directory".into());
-        }
+        // Check for executables that exist but aren't listed in the config file.
+        let unused_executables = fs::read_dir(&config.root)
+            .unwrap_or_else(|_| panic!("Expected root to be a valid directory."))
+            .filter_map(|dir_entry| match dir_entry.map(|entry| entry.file_name()) {
+                Ok(file_name) => {
+                    if !config.games.iter().any(|game| game.path == file_name) {
+                        Some(file_name)
+                    } else {
+                        None
+                    }
+                }
+                Err(_) => panic!(),
+            })
+            .map(Problem::UnusedExe)
+            .collect();
 
         // Check for missing executables.
         let root = &mut config.root;
@@ -67,7 +79,7 @@ impl Config {
             .map(Problem::ConflictingGames)
             .collect();
 
-        let problems = [conflicting_games, missing_games].concat();
+        let problems = [unused_executables, conflicting_games, missing_games].concat();
         Ok((config, problems))
     }
 }
@@ -94,34 +106,3 @@ fn drain_duplicates(games: &mut Vec<Game>) -> Vec<Vec<Game>> {
         })
         .collect()
 }
-
-// TODO: Add a check for files that exist in the games folder that aren't registered.
-// fn read_games() -> std::io::Result<Vec<Game>> {
-//     fs::read_dir("/mnt/media1000/Games").map(|entries| {
-//         entries
-//             .filter_map(Result::ok)
-//             .map(game_from_dir_entry)
-//             .filter_map(|g| g)
-//             .collect()
-//     })
-// }
-
-// fn game_from_dir_entry(entry: DirEntry) -> Option<Game> {
-//     let metadata = entry.metadata().ok()?;
-
-//     if metadata.is_dir() {
-//         return None;
-//     }
-
-//     entry
-//         .path()
-//         .file_stem()
-//         .and_then(OsStr::to_str)
-//         .and_then(title_and_version)
-//         .map(|(title, version)| Game {
-//             title,
-//             version,
-//             bytes: metadata.len(),
-//             path: PathBuf::from("/games").join(entry.file_name()),
-//         })
-// }
