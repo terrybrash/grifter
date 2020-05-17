@@ -44,8 +44,11 @@ pub fn start(config: &Config, games: Vec<Game>) {
     .unwrap();
 
     let mut genres = igdb::get_genres(&config.igdb_key).unwrap();
+    genres.drain_filter(|genre| !games.iter().any(|game| game.genres.contains(&genre.id)));
     genres.sort_by(|a, b| a.name.cmp(&b.name));
+
     let mut themes = igdb::get_themes(&config.igdb_key).unwrap();
+    themes.drain_filter(|theme| !games.iter().any(|game| game.themes.contains(&theme.id)));
     themes.sort_by(|a, b| a.name.cmp(&b.name));
 
     let catalog = Catalog {
