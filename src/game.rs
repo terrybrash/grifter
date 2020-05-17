@@ -222,7 +222,12 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
             .map(|videos| {
                 videos
                     .iter()
-                    .map(|v| format!("https://www.youtube-nocookie.com/embed/{}?modestbranding=1", v.video_id))
+                    .map(|v| {
+                        format!(
+                            "https://www.youtube-nocookie.com/embed/{}?modestbranding=1",
+                            v.video_id
+                        )
+                    })
                     .collect()
             })
             .unwrap_or_default(),
