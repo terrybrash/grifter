@@ -44,9 +44,9 @@ impl Config {
     where
         P: AsRef<Path>,
     {
-        let text = fs::read_to_string(&path).expect(&format!("Read {:?}", path.as_ref()));
+        let text = fs::read_to_string(&path).unwrap_or_else(|_| panic!("Read {:?}", path.as_ref()));
         let mut config: Config =
-            toml::from_str(&text).expect(&format!("Parse {:?}", path.as_ref()));
+            toml::from_str(&text).unwrap_or_else(|_| panic!("Parse {:?}", path.as_ref()));
 
         // Check for missing or unusable root directory.
         if !config.root.metadata()?.is_dir() {

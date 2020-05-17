@@ -16,9 +16,9 @@ use serde::Serialize;
 use std::io;
 use std::io::Write;
 
-pub fn gzip(mut bytes: Vec<u8>) -> io::Result<Vec<u8>> {
+pub fn gzip(bytes: Vec<u8>) -> io::Result<Vec<u8>> {
     let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::best());
-    encoder.write_all(&mut bytes)?;
+    encoder.write_all(&bytes)?;
     encoder.finish()
 }
 
