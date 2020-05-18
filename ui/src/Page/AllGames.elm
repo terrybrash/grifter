@@ -118,8 +118,8 @@ update catalog msg model =
         FilterOnlinePvp mustHave ->
             ( filterGames catalog { model | mustHaveOnlinePvp = mustHave }, Cmd.none )
 
-        KeyDown { key } ->
-            if not model.isSearchFocused && isSingleAlphaNum key then
+        KeyDown { key, ctrl } ->
+            if not ctrl && not model.isSearchFocused && isSingleAlphaNum key then
                 ( filterGames catalog { model | search = key }, Task.attempt (\_ -> NoOp) (Browser.Dom.focus "search") )
 
             else
