@@ -5,7 +5,7 @@ import Css exposing (..)
 import Html.Styled as Html exposing (Html)
 import Html.Styled.Attributes as Attr exposing (css)
 import Set
-import Shared exposing (white)
+import Shared
 import Url
 
 
@@ -70,13 +70,13 @@ view catalog game =
 
         style =
             [ property "display" "grid"
-            , property "grid-template-columns" "300px auto"
+            , Shared.gridTemplateColumns
             , property "grid-template-rows" "min-content"
-            , property "grid-gap" "20px"
-            , fontFamilies [ "Segoe UI", "sans-serif" ]
-            , padding (px 20)
+            , property "grid-gap" "14px 20px"
+            , fontFamilies [ "Manrope", "sans-serif" ]
+            , padding (px 14)
             , backgroundColor Shared.background
-            , color white
+            , color Shared.foreground
             , minHeight (vh 100)
             , boxSizing borderBox
             ]
@@ -122,7 +122,7 @@ viewInfo game genres multiplayer =
             [ Html.div [ css [ displayFlex, flexWrap wrap, margin (px -chipMargin) ] ]
                 (List.map (viewChip (hex "#4D4DCA")) genres ++ List.map (viewChip (hex "#7F48D2")) multiplayer)
             ]
-        , Html.p [ css [ color (hex "#8483A1") ] ]
+        , Html.p [ css [ color Shared.foregroundOffset ] ]
             [ case game.summary of
                 Just summary ->
                     Html.text summary
@@ -146,6 +146,7 @@ viewChip color text =
             , fontSize (em 0.9)
             , whiteSpace noWrap
             , margin (px chipMargin)
+            , Css.color (rgb 255 255 255)
             ]
         ]
         [ Html.text text ]
@@ -157,7 +158,7 @@ viewMedia game =
         [ css
             [ property "display" "grid"
             , property "grid-row" "2"
-            , property "grid-template-columns" "repeat(3, 1fr)"
+            , property "grid-template-columns" "repeat(2, 1fr)"
             , property "grid-gap" "10px"
             , property "height" "min-content"
             ]

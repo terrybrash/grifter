@@ -218,15 +218,20 @@ view : Backend.Catalog -> Model -> Html Msg
 view catalog model =
     div
         [ css
-            [ displayFlex
+            [ property "display" "grid"
+            , property "grid-template-rows" "min-content auto"
+            , Shared.gridTemplateColumns
+            , property "grid-gap" "14px 20px"
             , minHeight (vh 100)
             , backgroundColor Shared.background
-            , color (rgb 255 255 255)
+            , color Shared.foreground
             , fontFamilies [ "Manrope", "sans-serif" ]
+            , padding (px 14)
             ]
         ]
-        [ viewSidebar catalog model
-        , div [ css [ flexGrow (int 1) ] ]
+        [ viewTitle
+        , viewSidebar catalog model
+        , div [ css [ flexGrow (int 1), property "grid-row" "2", property "grid-column" "2" ] ]
             (case model.games of
                 Just games ->
                     [ viewGames games, viewPaginator games ]
@@ -241,9 +246,9 @@ viewPaginator : Pagination (List Game) -> Html Msg
 viewPaginator games =
     let
         styleButton =
-            [ backgroundColor (rgba 0 0 0 0)
-            , color (rgb 255 255 255)
-            , border3 (px 1.5) solid (rgb 255 255 255)
+            [ backgroundColor transparent
+            , color Shared.foreground
+            , border3 (px 1.5) solid Shared.foreground
             , borderRadius (px 2)
             , width (px 32)
             , height (px 32)
@@ -275,7 +280,7 @@ viewPaginator games =
         total =
             Pagination.count games
     in
-    div [ css [ textAlign center ] ]
+    div [ css [ textAlign center, margin (px 32) ] ]
         [ button attrPrev [ text "❮" ]
         , span [] [ text ("Page " ++ String.fromInt (current + 1) ++ "/" ++ String.fromInt total) ]
         , button attrNext [ text "❯" ]
@@ -296,9 +301,8 @@ viewSidebar catalog model =
             in
             viewFilter (\f -> FilterGenre ( genre.id, f )) genre.name isGenreFiltered
     in
-    div [ css [ backgroundColor (rgba 0 0 0 0.25), padding (px Shared.spacing) ] ]
-        [ viewTitle
-        , viewSearch model.search
+    div [ css [ property "grid-row" "2", property "grid-column" "1" ] ]
+        [ viewSearch model.search
         , viewFilterGroup
             "Multiplayer"
             [ viewFilter FilterCoopCampaign "Co-op Campaign" model.mustHaveCoopCampaign
@@ -314,7 +318,7 @@ viewSidebar catalog model =
 
 viewTitle : Html msg
 viewTitle =
-    h1 [] [ text "Grifter" ]
+    h1 [ css [ property "grid-row" "1", property "grid-column" "1" ] ] [ text "Grifter" ]
 
 
 viewSearch : String -> Html Msg
@@ -330,10 +334,11 @@ viewSearch search =
         , css
             [ padding (px 11)
             , border unset
-            , backgroundColor Shared.white
+            , backgroundColor Shared.backgroundOffset
             , borderRadius (px 2)
-            , color Shared.black
+            , color Shared.foreground
             , fontSize inherit
+            , width (pct 100)
             ]
         ]
         []
@@ -370,17 +375,24 @@ checkbox attributes =
          , css
             [ verticalAlign middle
             , property "-webkit-appearance" "none"
-            , backgroundColor Shared.black
+            , backgroundColor unset
             , width (px 12)
             , height (px 12)
-            , border3 (px 1) solid Shared.white
+            , border3 (px 1) solid Shared.foreground
             , borderRadius (px 2)
             , cursor inherit
             , margin4 (px 0) (px 7) (px 0) (px 0)
+            , displayFlex
+            , color Shared.foreground
+            , alignItems center
             , Css.checked
-                [ backgroundColor Shared.white
-                , border unset
-                , marginLeft (px 10)
+                [ backgroundColor unset
+                , Css.before
+                    [ property "content" "\"✓\""
+                    , fontSize (em 1.4)
+                    , lineHeight zero
+                    , marginBottom (px 7)
+                    ]
                 ]
             ]
          ]
@@ -402,9 +414,9 @@ viewGames : Pagination (List Game) -> Html Msg
 viewGames games =
     Keyed.node "div"
         [ css
-            [ displayFlex
-            , flexWrap wrap
-            , property "align-content" "flex-start"
+            [ property "display" "grid"
+            , property "grid-template-columns" "repeat(5, 1fr)"
+            , property "grid-gap" "35px"
             ]
         ]
         (games |> Pagination.current |> Tuple.second |> List.map viewKeyedGame)
@@ -424,7 +436,7 @@ viewGame game =
             , width (pct 100)
             , padding4 (px 10) (px 7) (px 5) (px 7)
             , boxSizing borderBox
-            , color Shared.white
+            , color Shared.foreground
             ]
 
         styleHighlight =
@@ -438,26 +450,28 @@ viewGame game =
             , opacity (num 0.14)
             , property "mix-blend-mode" "luminosity"
             , borderRadius (px 2)
+            , top zero
             ]
     in
     a
-        [ href ("/games/" ++ game.slug) --(Url.Builder.custom root [ game.path ] [] Nothing)
+        [ href ("/games/" ++ game.slug)
         , Attr.title game.name
         , css
-            [ width (px 150)
-            , height (px 200)
+            [ paddingTop (pct (4 / 3 * 100))
             , position relative
-            , marginTop (px Shared.spacing)
-            , marginLeft (px Shared.spacing)
             , cursor pointer
             , borderRadius (px 2)
             , overflow hidden
             , backgroundColor (hex "#4c3b71")
             , boxShadow5 (px 0) (px 2) (px 1) (px 0) (rgba 0 0 0 0.3)
+            , property "transition-duration" "0.2s"
+            , hover
+                [ property "transform" "translateY(-10px)"
+                , boxShadow5 (px 0) (px 12) (px 6) (px 0) (hex "#00000040")
+                ]
             ]
         ]
-        [ div [ css styleHighlight ] []
-        , case game.cover of
+        [ case game.cover of
             Just cover ->
                 img
                     [ src (Url.toString cover)
@@ -465,12 +479,15 @@ viewGame game =
                         [ width (pct 100)
                         , height (pct 100)
                         , property "object-fit" "cover"
+                        , position absolute
+                        , top zero
                         ]
                     ]
                     []
 
             Nothing ->
                 span [ css styleTitle ] [ text game.name ]
+        , div [ css styleHighlight ] []
         ]
 
 

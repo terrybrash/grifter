@@ -1,4 +1,14 @@
-module Shared exposing (KeyboardEvent, accent, accent2, background, black, onKeyDown, spacing, userSelectNone, white)
+module Shared exposing
+    ( KeyboardEvent
+    , background
+    , backgroundOffset
+    , foreground
+    , foregroundOffset
+    , gridTemplateColumns
+    , onKeyDown
+    , spacing
+    , userSelectNone
+    )
 
 import Browser.Events
 import Css exposing (Color, Style, hex, property, rgb)
@@ -7,43 +17,72 @@ import Json.Decode.Pipeline as D
 import Url.Builder exposing (Root(..))
 
 
-
--- CONSTANTS
-
-
 spacing : Float
 spacing =
     14
 
 
-accent : Color
-accent =
-    hex "#522ace"
+userSelectNone : Style
+userSelectNone =
+    property "user-select" "none"
 
 
-accent2 : Color
-accent2 =
-    hex "#9744E9"
+gridTemplateColumns : Style
+gridTemplateColumns =
+    property "grid-template-columns" "250px 1000px"
+
+
+
+-- THEME
+
+
+type Theme
+    = Light
+    | Dark
+
+
+theme =
+    Light
 
 
 background : Color
 background =
-    hex "#212033"
+    case theme of
+        Light ->
+            rgb 221 221 221
+
+        Dark ->
+            hex "#212033"
 
 
-white : Color
-white =
-    rgb 255 255 255
+backgroundOffset : Color
+backgroundOffset =
+    case theme of
+        Light ->
+            rgb 255 255 255
+
+        Dark ->
+            rgb 20 13 35
 
 
-black : Color
-black =
-    rgb 0 0 0
+foreground : Color
+foreground =
+    case theme of
+        Light ->
+            rgb 0 0 0
+
+        Dark ->
+            rgb 255 255 255
 
 
-userSelectNone : Style
-userSelectNone =
-    property "user-select" "none"
+foregroundOffset : Color
+foregroundOffset =
+    case theme of
+        Dark ->
+            hex "#8483A1"
+
+        Light ->
+            hex "#666666"
 
 
 
