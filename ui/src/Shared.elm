@@ -41,8 +41,9 @@ type Theme
     | Dark
 
 
+theme : Theme
 theme =
-    Light
+    Dark
 
 
 background : Color
@@ -52,7 +53,7 @@ background =
             rgb 221 221 221
 
         Dark ->
-            hex "#212033"
+            hex "#1e1e1e"
 
 
 backgroundOffset : Color
@@ -62,7 +63,7 @@ backgroundOffset =
             rgb 255 255 255
 
         Dark ->
-            rgb 20 13 35
+            rgb 0 0 0
 
 
 foreground : Color
@@ -78,11 +79,11 @@ foreground =
 foregroundOffset : Color
 foregroundOffset =
     case theme of
-        Dark ->
-            hex "#8483A1"
-
         Light ->
             hex "#666666"
+
+        Dark ->
+            hex "#9d9d9d"
 
 
 

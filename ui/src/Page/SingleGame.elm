@@ -133,7 +133,7 @@ viewDownload game =
             [ Html.text "Download" ]
         , Html.span [ css [ marginLeft (px 4) ] ] [ Html.text (formatBytes game.sizeBytes) ]
         , Html.div
-            [ css [ fill Shared.foreground, marginTop (px -2) ] ]
+            [ css [ fill Shared.foreground, lineHeight zero, marginTop (px -2) ] ]
             [ viewWindowsLogo [ SvgAttr.height "1em" ]
             ]
         ]
