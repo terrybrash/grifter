@@ -6,6 +6,8 @@ import Html.Styled as Html exposing (Html)
 import Html.Styled.Attributes as Attr exposing (css)
 import Set
 import Shared
+import Svg.Styled as Svg
+import Svg.Styled.Attributes as SvgAttr
 import Url
 
 
@@ -115,6 +117,7 @@ viewDownload game =
         ]
         [ Html.a
             [ Attr.href game.path
+            , Attr.download ""
             , css
                 [ border3 (px 2) solid Shared.foreground
                 , borderRadius (px 3)
@@ -129,7 +132,10 @@ viewDownload game =
             ]
             [ Html.text "Download" ]
         , Html.span [ css [ marginLeft (px 4) ] ] [ Html.text (formatBytes game.sizeBytes) ]
-        , Html.img [ Attr.src "/assets/windows.svg", css [ height (em 1), marginTop (px -2) ] ] []
+        , Html.div
+            [ css [ fill Shared.foreground, marginTop (px -2) ] ]
+            [ viewWindowsLogo [ SvgAttr.height "1em" ]
+            ]
         ]
 
 
@@ -261,4 +267,15 @@ viewVideo video =
                 ]
             ]
             []
+        ]
+
+
+viewWindowsLogo : List (Svg.Attribute msg) -> Html msg
+viewWindowsLogo attributes =
+    Svg.svg
+        (attributes ++ [ SvgAttr.viewBox "0 0 174 153" ])
+        [ Svg.path [ SvgAttr.d "m170.41 21.125c-32.996 13.642-48.861 5.973-63.16-3.65l-16.278 56.462c14.285 9.678 31.531 17.635 63.188 3.463z" ] []
+        , Svg.path [ SvgAttr.d "m63.142 134.63c-14.331-9.645-29.91-17.578-62.984-3.902l16.195-56.568c33.081-13.678 48.973-5.938 63.29 3.766l-16.501 56.703z" ] []
+        , Svg.path [ SvgAttr.d "m82.393 67.715c-8.628-5.81-17.907-11.233-31.085-11.333-8.695-.067-19.045 2.403-32.184 7.836l16.283-56.422c33.059-13.669 48.938-5.933 63.245 3.764z" ] []
+        , Svg.path [ SvgAttr.d "m88.227 83.369c14.313 9.637 30.212 17.313 63.243 3.66l-16.281 56.234c-33.037 13.664-48.903 5.926-63.201-3.77z" ] []
         ]

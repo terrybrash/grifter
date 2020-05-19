@@ -254,7 +254,7 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
                 None => None,
             }
         },
-        path: PathBuf::from("games").join(&distribution.path),
+        path: PathBuf::from("/api/download").join(&distribution.path),
     }
 }
 
