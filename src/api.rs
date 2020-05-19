@@ -2,8 +2,7 @@ use crate::config::Config;
 use crate::game::Game;
 use crate::igdb;
 use flate2::write::GzEncoder;
-use rocket::http::hyper::header::ContentEncoding;
-use rocket::http::hyper::header::Encoding;
+use rocket::http::hyper::header::{CacheControl, CacheDirective, ContentEncoding, Encoding};
 use rocket::http::ContentType;
 use rocket::http::Status;
 use rocket::response::Responder;
@@ -71,14 +70,15 @@ pub fn start(config: &Config, games: Vec<Game>) {
         .launch();
 }
 
-struct EncodedContent<R>(pub ContentType, pub Encoding, pub R);
+struct EncodedContent<R>(pub ContentType, pub Encoding, pub CacheControl, pub R);
 impl<'r, R: Responder<'r>> Responder<'r> for EncodedContent<R> {
     fn respond_to(self, req: &rocket::Request) -> Result<Response<'r>, Status> {
-        let EncodedContent(content_type, encoding, responder) = self;
+        let EncodedContent(content_type, encoding, cache_control, responder) = self;
         Response::build()
             .merge(responder.respond_to(req)?)
             .header(ContentEncoding(vec![encoding]))
             .header(content_type)
+            .header(cache_control)
             .status(Status::Accepted)
             .ok()
     }
@@ -86,7 +86,12 @@ impl<'r, R: Responder<'r>> Responder<'r> for EncodedContent<R> {
 
 #[get("/")]
 fn get_index(model: State<Model>) -> EncodedContent<Vec<u8>> {
-    EncodedContent(ContentType::HTML, Encoding::Gzip, model.index.clone())
+    EncodedContent(
+        ContentType::HTML,
+        Encoding::Gzip,
+        CacheControl(vec![CacheDirective::MaxAge(60 * 2)]),
+        model.index.clone(),
+    )
 }
 
 #[get("/<_path..>")]
@@ -96,5 +101,10 @@ fn get_anything(_path: PathBuf, model: State<Model>) -> EncodedContent<Vec<u8>> 
 
 #[get("/api/catalog")]
 fn get_catalog(model: State<Model>) -> EncodedContent<Vec<u8>> {
-    EncodedContent(ContentType::JSON, Encoding::Gzip, model.catalog.clone())
+    EncodedContent(
+        ContentType::JSON,
+        Encoding::Gzip,
+        CacheControl(vec![CacheDirective::MaxAge(60 * 60)]),
+        model.catalog.clone(),
+    )
 }
