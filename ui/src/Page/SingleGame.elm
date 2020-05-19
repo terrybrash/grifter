@@ -83,6 +83,7 @@ view catalog game =
     in
     Html.div [ css style ]
         [ viewHeader game
+        , viewDownload game
         , viewInfo game genres multiplayer
         , viewMedia game
         ]
@@ -99,6 +100,46 @@ viewHeader game =
         ]
         [ Html.h1 [] [ Html.text game.name ]
         ]
+
+
+viewDownload : Backend.Game -> Html msg
+viewDownload game =
+    Html.div
+        [ css
+            [ property "grid-column" "2"
+            , property "grid-row" "1"
+            , displayFlex
+            , alignItems center
+            , flexDirection rowReverse
+            ]
+        ]
+        [ Html.a
+            [ Attr.href game.path
+            , css
+                [ border3 (px 2) solid Shared.foreground
+                , borderRadius (px 3)
+                , padding2 (px 12) (px 20)
+                , color Shared.foreground
+                , textDecoration unset
+                , display inlineBlock
+                , fontWeight bold
+                , boxShadow5 zero (px 1) (px 2) (px 1) (rgba 0 0 0 0.24)
+                , marginLeft (px 20)
+                ]
+            ]
+            [ Html.text "Download" ]
+        , Html.span [ css [ marginLeft (px 4) ] ] [ Html.text (formatBytes game.sizeBytes) ]
+        , Html.img [ Attr.src "/assets/windows.svg", css [ height (em 1), marginTop (px -2) ] ] []
+        ]
+
+
+formatBytes : Int -> String
+formatBytes bytes =
+    if bytes > 1000000000 then
+        String.fromFloat (toFloat (Basics.round ((toFloat bytes / 1000000000) * 10)) / 10) ++ " GB"
+
+    else
+        String.fromInt (Basics.round (toFloat bytes / 1000000)) ++ " MB"
 
 
 chipMargin : Float
