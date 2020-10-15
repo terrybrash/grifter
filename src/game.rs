@@ -10,19 +10,19 @@ type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone)]
-pub enum Problem {
+pub enum Warning {
     MissingSlug(String),
 }
 
-impl fmt::Display for Problem {
+impl fmt::Display for Warning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Problem::MissingSlug(slug) => write!(f, "slug \"{}\" doesn't exist on IGDB", slug),
+            Warning::MissingSlug(slug) => write!(f, "slug \"{}\" doesn't exist on IGDB", slug),
         }
     }
 }
 
-pub fn games_from_config(config: &Config) -> Result<(Vec<Game>, Vec<Problem>)> {
+pub fn games_from_config(config: &Config) -> Result<(Vec<Game>, Vec<Warning>)> {
     let slugs: Vec<&str> = config.games.iter().map(|g| g.slug.as_str()).collect();
     let mut games: Vec<Game> = igdb::get_games(&config.igdb_key, &slugs)
         .unwrap()
@@ -39,19 +39,19 @@ pub fn games_from_config(config: &Config) -> Result<(Vec<Game>, Vec<Problem>)> {
         .collect();
     games.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let problems = config
+    let warnings = config
         .games
         .iter()
         .filter_map(|a| {
             if games.iter().any(|b| a.slug == b.slug) {
                 None
             } else {
-                Some(Problem::MissingSlug(a.slug.to_owned()))
+                Some(Warning::MissingSlug(a.slug.to_owned()))
             }
         })
         .collect();
 
-    Ok((games, problems))
+    Ok((games, warnings))
 }
 
 #[derive(Debug, Serialize, Clone)]

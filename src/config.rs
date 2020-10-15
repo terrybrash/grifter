@@ -6,23 +6,23 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone)]
-pub enum Problem {
+pub enum Warning {
     ConflictingGames(Vec<Game>),
     MissingExe(Game),
     UnusedExe(OsString),
 }
 
-impl fmt::Display for Problem {
+impl fmt::Display for Warning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Problem::ConflictingGames(games) => write!(
+            Warning::ConflictingGames(games) => write!(
                 f,
                 "{} games with conflicting slug {:?}",
                 games.len(),
                 games[0]
             ),
-            Problem::MissingExe(game) => write!(f, "game path {:?} doesn't exist", game.path),
-            Problem::UnusedExe(path) => write!(f, "{:?} exists in root dir but isn't used", path),
+            Warning::MissingExe(game) => write!(f, "game path {:?} doesn't exist", game.path),
+            Warning::UnusedExe(path) => write!(f, "{:?} exists in root dir but isn't used", path),
         }
     }
 }
@@ -41,7 +41,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_file<P>(path: P) -> Result<(Self, Vec<Problem>), Box<dyn std::error::Error>>
+    pub fn from_file<P>(path: P) -> Result<(Self, Vec<Warning>), Box<dyn std::error::Error>>
     where
         P: AsRef<Path>,
     {
@@ -62,7 +62,7 @@ impl Config {
                 }
                 Err(_) => panic!(),
             })
-            .map(Problem::UnusedExe)
+            .map(Warning::UnusedExe)
             .collect();
 
         // Check for missing executables.
@@ -70,17 +70,17 @@ impl Config {
         let missing_games = config
             .games
             .drain_filter(|g| !root.join(&g.path).exists())
-            .map(Problem::MissingExe)
+            .map(Warning::MissingExe)
             .collect::<Vec<_>>();
 
         // Check for duplicate game entries.
         let conflicting_games = drain_duplicates(&mut config.games)
             .into_iter()
-            .map(Problem::ConflictingGames)
+            .map(Warning::ConflictingGames)
             .collect();
 
-        let problems = [unused_executables, conflicting_games, missing_games].concat();
-        Ok((config, problems))
+        let warnings = [unused_executables, conflicting_games, missing_games].concat();
+        Ok((config, warnings))
     }
 }
 
