@@ -8,6 +8,7 @@ mod api;
 mod config;
 mod game;
 mod igdb;
+mod twitch;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (config, warnings) = Config::from_file("grifter.toml")?;

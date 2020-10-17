@@ -36,7 +36,8 @@ pub struct Game {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub root: PathBuf,
-    pub igdb_key: String,
+    pub client_id: String,
+    pub client_secret: String,
     pub games: Vec<Game>,
 }
 

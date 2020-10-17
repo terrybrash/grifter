@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::game::Game;
 use crate::igdb;
+use crate::twitch;
 use flate2::write::GzEncoder;
 use rocket::http::hyper::header::{CacheControl, CacheDirective, ContentEncoding, Encoding};
 use rocket::http::ContentType;
@@ -35,19 +36,21 @@ struct Catalog {
 }
 
 pub fn start(config: &Config, games: Vec<Game>) {
-    let allowed_origins = AllowedOrigins::All;
-    let cors = CorsOptions {
-        allowed_origins,
+    let cors_options = CorsOptions {
+        allowed_origins: AllowedOrigins::All,
         ..Default::default()
-    }
-    .to_cors()
-    .unwrap();
+    };
+    let cors = cors_options.to_cors().unwrap();
 
-    let mut genres = igdb::get_genres(&config.igdb_key).unwrap();
+    let access_token = twitch::authenticate(&config.client_id, &config.client_secret)
+        .unwrap()
+        .access_token;
+
+    let mut genres = igdb::get_genres(&config.client_id, &access_token).unwrap();
     genres.drain_filter(|genre| !games.iter().any(|game| game.genres.contains(&genre.id)));
     genres.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let mut themes = igdb::get_themes(&config.igdb_key).unwrap();
+    let mut themes = igdb::get_themes(&config.client_id, &access_token).unwrap();
     themes.drain_filter(|theme| !games.iter().any(|game| game.themes.contains(&theme.id)));
     themes.sort_by(|a, b| a.name.cmp(&b.name));
 

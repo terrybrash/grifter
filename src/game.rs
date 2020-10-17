@@ -23,8 +23,12 @@ impl fmt::Display for Warning {
 }
 
 pub fn games_from_config(config: &Config) -> Result<(Vec<Game>, Vec<Warning>)> {
+    let access_token = crate::twitch::authenticate(&config.client_id, &config.client_secret)
+        .unwrap()
+        .access_token;
+
     let slugs: Vec<&str> = config.games.iter().map(|g| g.slug.as_str()).collect();
-    let mut games: Vec<Game> = igdb::get_games(&config.igdb_key, &slugs)
+    let mut games: Vec<Game> = igdb::get_games(&config.client_id, &access_token, &slugs)
         .unwrap()
         .into_iter()
         .map(|igdb_game| {
