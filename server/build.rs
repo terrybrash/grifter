@@ -5,23 +5,26 @@ use std::process::{exit, Command};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     Command::new(ELM)
-        .args(&["make", "ui/Main.elm", "--optimize", "--output=elm.js"])
+        .current_dir("../client-web")
+        .args(&["make", "src/Main.elm", "--optimize", "--output=elm.js"])
         .output()
         .map_err(missing_command("elm"))?;
 
     // Additional javascript minification. This follows the advice given here:
     // https://guide.elm-lang.org/optimization/asset_size.html
     Command::new(UGLIFYJS)
+        .current_dir("../client-web")
         .args(&["elm.js", "--compress", r##"'pure_funcs="F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9",pure_getters,keep_fargs=false,unsafe_comps,unsafe'"##, "--output=elm.js"])
         .output()
         .map_err(missing_command("uglifyjs"))?;
     Command::new(UGLIFYJS)
+        .current_dir("../client-web")
         .args(&["elm.js", "--mangle", "--output=elm.js"])
         .output()
         .map_err(missing_command("uglifyjs"))?;
 
     // Insert the compiled elm app into an html file ready to be served.
-    let elm = std::fs::read_to_string("./elm.js")?;
+    let elm = std::fs::read_to_string("../client-web/elm.js")?;
     let index = format!(
         r##"
         <!DOCTYPE HTML>
@@ -42,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::write(out_dir.join("index.html"), index)?;
 
     // Cleanup
-    std::fs::remove_file("elm.js")?;
+    std::fs::remove_file("../client-web/elm.js")?;
 
     Ok(())
 }
