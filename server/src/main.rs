@@ -11,6 +11,14 @@ mod igdb;
 mod twitch;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    const VERSION: &'static str = env!("CARGO_PKG_VERSION_MINOR");
+    println!("         _ ___ _           ");
+    println!(" ___ ___|_|  _| |_ ___ ___ ");
+    println!("| . |  _| |  _|  _| -_|  _|");
+    println!("|_  |_| |_|_| |_| |___|_|  ");
+    println!("|___|{:>20}", format!("version {}", VERSION));
+    println!();
+
     let (config, warnings) = Config::from_file("grifter.toml")?;
     for warning in warnings {
         println!("Warning: {}", warning);
