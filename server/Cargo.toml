@@ -3,7 +3,7 @@ authors = ['Terry Brashaw <terrybrashaw@gmail.com>']
 build = 'build.rs'
 edition = '2018'
 name = 'grifter'
-version = '0.1.0'
+version = '0.2.0'
 
 [dependencies]
 flate2 = '1.0.18'
