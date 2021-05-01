@@ -8,7 +8,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .current_dir("../client-web")
         .args(&["make", "src/Main.elm", "--optimize", "--output=elm.js"])
         .output()
-        .map_err(missing_command("elm"))?;
+        .map_err(|e| match e.kind() {
+            NotFound => {
+                print_how_to_install_elm();
+                exit(1);
+            }
+            _ => e,
+        })?;
 
     // Additional javascript minification. This follows the advice given here:
     // https://guide.elm-lang.org/optimization/asset_size.html
@@ -16,12 +22,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .current_dir("../client-web")
         .args(&["elm.js", "--compress", r##"'pure_funcs="F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9",pure_getters,keep_fargs=false,unsafe_comps,unsafe'"##, "--output=elm.js"])
         .output()
-        .map_err(missing_command("uglifyjs"))?;
+        .map_err(|e| {
+            match e.kind() {
+                NotFound => {
+                    print_how_to_install_uglifyjs();
+                    exit(1);
+                }
+                _ => e
+            }
+        })?;
     Command::new(UGLIFYJS)
         .current_dir("../client-web")
         .args(&["elm.js", "--mangle", "--output=elm.js"])
         .output()
-        .map_err(missing_command("uglifyjs"))?;
+        .map_err(|e| match e.kind() {
+            NotFound => {
+                print_how_to_install_uglifyjs();
+                exit(1);
+            }
+            _ => e,
+        })?;
 
     // Insert the compiled elm app into an html file ready to be served.
     let elm = std::fs::read_to_string("../client-web/elm.js")?;
@@ -50,26 +70,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(windows)]
-pub const ELM: &'static str = "elm.cmd"; // Assuming Elm is installed via npm.
-#[cfg(not(windows))]
+fn print_how_to_install_uglifyjs() {
+    eprintln!("I tried to run 'uglifyjs' but couldn't find it!");
+    eprintln!("The quickest way to fix this is to install it from npm using this command:");
+    eprintln!("$ npm install --global uglify-js");
+}
+
+fn print_how_to_install_elm() {
+    eprintln!("I tried to run 'elm' but couldn't find it!");
+    eprintln!("Elm is really easy to install. It's just a single binary.");
+    eprintln!("Go to this link and either (1) download the binary, or (2) run the installer.");
+    eprintln!("https://github.com/elm/compiler/releases/tag/0.19.1");
+}
+
 pub const ELM: &'static str = "elm";
 
 #[cfg(windows)]
 pub const UGLIFYJS: &'static str = "uglifyjs.cmd"; // Assuming UglifyJS is installed via npm.
 #[cfg(not(windows))]
 pub const UGLIFYJS: &'static str = "uglifyjs";
-
-/// Maps a `NotFound` error into a nicer error message explaining what's missing.
-fn missing_command(command: &'static str) -> impl Fn(std::io::Error) -> std::io::Error {
-    move |e| match e.kind() {
-        NotFound => {
-            eprintln!(
-                "\"{}\" wasn't found on the system. Did you forget to install it?",
-                command
-            );
-            exit(1)
-        }
-        _ => e,
-    }
-}
