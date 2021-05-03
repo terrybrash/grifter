@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::{exit, Command};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    Command::new(ELM)
+    let elm_output = Command::new(ELM)
         .current_dir("../client-web")
         .args(&["make", "src/Main.elm", "--optimize", "--output=elm.js"])
         .output()
@@ -15,6 +15,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => e,
         })?;
+
+    if !elm_output.status.success() {
+        eprintln!("{}", String::from_utf8_lossy(&output.stdout));
+        eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+        panic!("Elm failed to compile. Fix the errors and try rebuilding.");
+    }
 
     // Additional javascript minification. This follows the advice given here:
     // https://guide.elm-lang.org/optimization/asset_size.html
