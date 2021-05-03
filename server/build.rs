@@ -17,8 +17,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
 
     if !elm_output.status.success() {
-        eprintln!("{}", String::from_utf8_lossy(&output.stdout));
-        eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+        eprintln!("{}", String::from_utf8_lossy(&elm_output.stdout));
+        eprintln!("{}", String::from_utf8_lossy(&elm_output.stderr));
         panic!("Elm failed to compile. Fix the errors and try rebuilding.");
     }
 
