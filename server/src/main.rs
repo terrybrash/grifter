@@ -11,7 +11,7 @@ mod igdb;
 mod twitch;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    const VERSION: &'static str = env!("CARGO_PKG_VERSION_MINOR");
+    const VERSION: &str = env!("CARGO_PKG_VERSION_MINOR");
     println!("         _ ___ _           ");
     println!(" ___ ___|_|  _| |_ ___ ___ ");
     println!("| . |  _| |  _|  _| -_|  _|");

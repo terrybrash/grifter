@@ -5,6 +5,12 @@ use std::process::{exit, Command};
 use walkdir::WalkDir;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let is_release = match env::var("PROFILE")?.as_str() {
+        "debug" => false,
+        "release" => true,
+        profile => panic!("unknown profile: {}", profile),
+    };
+
     for entry in WalkDir::new("../client-web") {
         let entry = match entry {
             Ok(entry) => entry,
@@ -16,16 +22,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             None => continue,
         };
         if extension == "elm" || extension == "json" {
-            match path.to_str() {
-                Some(path) => println!("cargo:rerun-if-changed={}", path),
-                None => {}
+            if let Some(path) = path.to_str() {
+                println!("cargo:rerun-if-changed={}", path);
             }
         }
     }
 
     let elm_output = Command::new(ELM)
         .current_dir("../client-web")
-        .args(&["make", "src/Main.elm", "--optimize", "--output=elm.js"])
+        .args(&[
+            "make",
+            "src/Main.elm",
+            if is_release { "--optimize" } else { "--debug" },
+            "--output=elm.js",
+        ])
         .output()
         .map_err(|e| match e.kind() {
             NotFound => {
@@ -41,32 +51,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("Elm failed to compile. Fix the errors and try rebuilding.");
     }
 
-    // Additional javascript minification. This follows the advice given here:
-    // https://guide.elm-lang.org/optimization/asset_size.html
-    Command::new(UGLIFYJS)
-        .current_dir("../client-web")
-        .args(&["elm.js", "--compress", r##"'pure_funcs="F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9",pure_getters,keep_fargs=false,unsafe_comps,unsafe'"##, "--output=elm.js"])
-        .output()
-        .map_err(|e| {
-            match e.kind() {
+    if is_release {
+        // Additional javascript minification. This follows the advice given here:
+        // https://guide.elm-lang.org/optimization/asset_size.html
+        Command::new(UGLIFYJS)
+            .current_dir("../client-web")
+            .args(&["elm.js", "--compress", r##"'pure_funcs="F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9",pure_getters,keep_fargs=false,unsafe_comps,unsafe'"##, "--output=elm.js"])
+            .output()
+            .map_err(|e| {
+                match e.kind() {
+                    NotFound => {
+                        print_how_to_install_uglifyjs();
+                        exit(1);
+                    }
+                    _ => e
+                }
+            })?;
+        Command::new(UGLIFYJS)
+            .current_dir("../client-web")
+            .args(&["elm.js", "--mangle", "--output=elm.js"])
+            .output()
+            .map_err(|e| match e.kind() {
                 NotFound => {
                     print_how_to_install_uglifyjs();
                     exit(1);
                 }
-                _ => e
-            }
-        })?;
-    Command::new(UGLIFYJS)
-        .current_dir("../client-web")
-        .args(&["elm.js", "--mangle", "--output=elm.js"])
-        .output()
-        .map_err(|e| match e.kind() {
-            NotFound => {
-                print_how_to_install_uglifyjs();
-                exit(1);
-            }
-            _ => e,
-        })?;
+                _ => e,
+            })?;
+    }
 
     // Insert the compiled elm app into an html file ready to be served.
     let elm = std::fs::read_to_string("../client-web/elm.js")?;
@@ -108,9 +120,9 @@ fn print_how_to_install_elm() {
     eprintln!("https://github.com/elm/compiler/releases/tag/0.19.1");
 }
 
-pub const ELM: &'static str = "elm";
+pub const ELM: &str = "elm";
 
 #[cfg(windows)]
-pub const UGLIFYJS: &'static str = "uglifyjs.cmd"; // Assuming UglifyJS is installed via npm.
+pub const UGLIFYJS: &str = "uglifyjs.cmd"; // Assuming UglifyJS is installed via npm.
 #[cfg(not(windows))]
-pub const UGLIFYJS: &'static str = "uglifyjs";
+pub const UGLIFYJS: &str = "uglifyjs";
