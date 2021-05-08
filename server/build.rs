@@ -2,8 +2,27 @@ use std::env;
 use std::io::ErrorKind::NotFound;
 use std::path::PathBuf;
 use std::process::{exit, Command};
+use walkdir::WalkDir;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    for entry in WalkDir::new("../client-web") {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+        let path = entry.path();
+        let extension = match path.extension() {
+            Some(extension) => extension,
+            None => continue,
+        };
+        if extension == "elm" || extension == "json" {
+            match path.to_str() {
+                Some(path) => println!("cargo:rerun-if-changed={}", path),
+                None => {}
+            }
+        }
+    }
+
     let elm_output = Command::new(ELM)
         .current_dir("../client-web")
         .args(&["make", "src/Main.elm", "--optimize", "--output=elm.js"])
