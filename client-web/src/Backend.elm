@@ -1,4 +1,12 @@
-module Backend exposing (Catalog, Game, Genre, Graphics(..), Multiplayer(..), Theme, getCatalog)
+module Backend exposing
+    ( Catalog
+    , Game
+    , Genre
+    , Graphics(..)
+    , Multiplayer(..)
+    , Theme
+    , getCatalog
+    )
 
 import Http
 import Json.Decode as Decode exposing (Decoder, andThen, int, list, nullable, string)
@@ -42,19 +50,34 @@ type alias Game =
     { name : String
     , slug : String
     , searchNames : List String
-    , cover : Maybe Url
     , summary : Maybe String
     , genres : Set Int
     , themes : Set Int
+
+    -- Multiplayer
     , hasSinglePlayer : Bool
     , hasCoopCampaign : Bool
     , offlineCoop : Multiplayer
     , offlinePvp : Multiplayer
     , onlineCoop : Multiplayer
     , onlinePvp : Multiplayer
+
+    -- Media
+    , cover : Maybe Url
     , screenshots : List String
     , videos : List String
     , graphics : Graphics
+
+    -- Stores
+    , steam : Maybe Url
+    , gog : Maybe Url
+    , itch : Maybe Url
+    , epic : Maybe Url
+    , googlePlay : Maybe Url
+    , applePhone : Maybe Url
+    , applePad : Maybe Url
+
+    -- File info
     , path : String
     , sizeBytes : Int
     , version : Maybe String
@@ -67,19 +90,30 @@ decodeGame =
         |> required "name" string
         |> required "slug" string
         |> required "search_names" (list string)
-        |> required "cover" (nullable decodeUrl)
         |> required "summary" (nullable string)
         |> required "genres" (decodeSet int)
         |> required "themes" (decodeSet int)
+        -- Multiplayer
         |> required "has_single_player" Decode.bool
         |> required "has_coop_campaign" Decode.bool
         |> required "offline_coop" decodeMultiplayer
         |> required "offline_pvp" decodeMultiplayer
         |> required "online_coop" decodeMultiplayer
         |> required "online_pvp" decodeMultiplayer
+        -- Media
+        |> required "cover" (nullable decodeUrl)
         |> required "screenshots" (list string)
         |> required "videos" (list string)
         |> required "graphics" decodeGraphics
+        -- Stores
+        |> required "steam" (nullable decodeUrl)
+        |> required "gog" (nullable decodeUrl)
+        |> required "itch" (nullable decodeUrl)
+        |> required "epic" (nullable decodeUrl)
+        |> required "google_play" (nullable decodeUrl)
+        |> required "apple_phone" (nullable decodeUrl)
+        |> required "apple_pad" (nullable decodeUrl)
+        -- File
         |> required "path" string
         |> required "size_bytes" int
         |> required "version" (nullable string)

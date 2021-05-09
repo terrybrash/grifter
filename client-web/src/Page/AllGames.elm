@@ -4,7 +4,7 @@ import Backend exposing (Game)
 import Browser.Dom
 import Css exposing (..)
 import Html.Styled exposing (Attribute, Html, a, button, div, h1, h3, img, input, label, span, text)
-import Html.Styled.Attributes as Attr exposing (checked, css, href, placeholder, rel, src, type_)
+import Html.Styled.Attributes as Attr exposing (css, href, placeholder, src, type_)
 import Html.Styled.Events as Event
 import Html.Styled.Keyed as Keyed
 import Pagination exposing (Pagination)
@@ -20,15 +20,21 @@ type Msg
     | NextPage (Pagination (List Game))
     | PrevPage (Pagination (List Game))
     | Search String
+    | KeyDown Shared.KeyboardEvent
+    | SearchFocused Bool
     | FilterGenre ( Int, Bool )
+      -- Multiplayer
     | FilterSinglePlayer Bool
     | FilterCoopCampaign Bool
     | FilterOfflineCoop Bool
     | FilterOfflinePvp Bool
     | FilterOnlineCoop Bool
     | FilterOnlinePvp Bool
-    | KeyDown Shared.KeyboardEvent
-    | SearchFocused Bool
+      -- Stores
+    | FilterSteam Bool
+    | FilterItch Bool
+    | FilterGog Bool
+    | FilterEpicGames Bool
 
 
 type alias Model =
@@ -37,12 +43,20 @@ type alias Model =
     , normalizedSearch : NormalizedSearch
     , isSearchFocused : Bool
     , mustHaveGenres : Set Int
+
+    -- Multiplayer
     , mustHaveSinglePlayer : Bool
     , mustHaveCoopCampaign : Bool
     , mustHaveOfflineCoop : Bool
     , mustHaveOfflinePvp : Bool
     , mustHaveOnlineCoop : Bool
     , mustHaveOnlinePvp : Bool
+
+    -- Stores
+    , mustHaveSteam : Bool
+    , mustHaveItch : Bool
+    , mustHaveGog : Bool
+    , mustHaveEpicGames : Bool
     }
 
 
@@ -68,6 +82,10 @@ init catalog =
         , mustHaveOfflineCoop = False
         , mustHaveOnlinePvp = False
         , mustHaveOnlineCoop = False
+        , mustHaveSteam = False
+        , mustHaveItch = False
+        , mustHaveGog = False
+        , mustHaveEpicGames = False
         }
 
 
@@ -117,6 +135,18 @@ update catalog msg model =
 
         FilterOnlinePvp mustHave ->
             ( filterGames catalog { model | mustHaveOnlinePvp = mustHave }, Cmd.none )
+
+        FilterSteam mustHave ->
+            ( filterGames catalog { model | mustHaveSteam = mustHave }, Cmd.none )
+
+        FilterGog mustHave ->
+            ( filterGames catalog { model | mustHaveGog = mustHave }, Cmd.none )
+
+        FilterItch mustHave ->
+            ( filterGames catalog { model | mustHaveItch = mustHave }, Cmd.none )
+
+        FilterEpicGames mustHave ->
+            ( filterGames catalog { model | mustHaveEpicGames = mustHave }, Cmd.none )
 
         KeyDown { key, ctrl } ->
             if not ctrl && not model.isSearchFocused && isSingleAlphaNum key then
@@ -206,6 +236,10 @@ filterGames catalog model =
                 |> filterIf model.mustHaveOfflinePvp (.offlinePvp >> isMultiplayer)
                 |> filterIf model.mustHaveOnlineCoop (.onlineCoop >> isMultiplayer)
                 |> filterIf model.mustHaveOnlinePvp (.onlinePvp >> isMultiplayer)
+                |> filterIf model.mustHaveSteam (.steam >> (\u -> u /= Nothing))
+                |> filterIf model.mustHaveItch (.itch >> (\u -> u /= Nothing))
+                |> filterIf model.mustHaveGog (.gog >> (\u -> u /= Nothing))
+                |> filterIf model.mustHaveEpicGames (.epic >> (\u -> u /= Nothing))
     in
     { model | games = Pagination.fromList (chunk gamesPerPage games) }
 
@@ -313,6 +347,12 @@ viewSidebar catalog model =
             , viewFilter FilterSinglePlayer "Single Player" model.mustHaveSinglePlayer
             ]
         , viewFilterGroup "Genres" (List.map viewGenreFilter catalog.genres)
+        , viewFilterGroup "Stores"
+            [ viewFilter FilterSteam "Steam" model.mustHaveSteam
+            , viewFilter FilterItch "Itch.io" model.mustHaveItch
+            , viewFilter FilterGog "Gog" model.mustHaveGog
+            , viewFilter FilterEpicGames "Epic Games" model.mustHaveEpicGames
+            ]
         ]
 
 

@@ -27,6 +27,31 @@ pub struct Theme {
     pub slug: String,
 }
 
+// pub const WEBSITE_OFFICIAL: u64 = 1;
+// pub const WEBSITE_WIKIA: u64 = 2;
+// pub const WEBSITE_WIKIPEDIA: u64 = 3;
+// pub const WEBSITE_FACEBOOK: u64 = 4;
+// pub const WEBSITE_TWITTER: u64 = 5;
+// pub const WEBSITE_TWITCH: u64 = 6;
+// pub const WEBSITE_INSTAGRAM: u64 = 8;
+// pub const WEBSITE_YOUTUBE: u64 = 9;
+pub const WEBSITE_APPLE_PHONE: u64 = 10;
+pub const WEBSITE_APPLE_PAD: u64 = 11;
+pub const WEBSITE_GOOGLE_PLAY: u64 = 12;
+pub const WEBSITE_STEAM: u64 = 13;
+// pub const WEBSITE_REDDIT: u64 = 14;
+pub const WEBSITE_ITCH: u64 = 15;
+pub const WEBSITE_EPIC_GAMES: u64 = 16;
+pub const WEBSITE_GOG: u64 = 17;
+// pub const WEBSITE_DISCORD: u64 = 18;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Website {
+    pub category: u64,
+    pub trusted: bool,
+    pub url: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MultiplayerMode {
     pub id: u64,
@@ -82,6 +107,8 @@ pub struct Game {
     pub keywords: HashSet<u64>,
     #[serde(default)]
     pub multiplayer_modes: Vec<MultiplayerMode>,
+    #[serde(default)]
+    pub websites: Vec<Website>,
     pub screenshots: Option<Vec<Screenshot>>,
     pub videos: Option<Vec<Video>>,
 }
@@ -129,6 +156,9 @@ where
             "themes",
             "keywords",
             "alternative_names.name",
+            "websites.category",
+            "websites.trusted",
+            "websites.url",
         ];
 
         let query = format!(
@@ -160,6 +190,7 @@ pub fn get_genres(client_id: &str, access_token: &str) -> Result<Vec<Genre>, Err
 }
 
 pub fn get_themes(client_id: &str, access_token: &str) -> Result<Vec<Theme>, Error> {
+    println!("{}", access_token);
     let response = post(&format!("{}/themes", IGDB_ENDPOINT))
         .set("client-id", client_id)
         .auth_kind("Bearer", access_token)
@@ -199,9 +230,11 @@ where
     }
 
     if response.status() == 400 {
-        // 400 from IGDB means there's syntax errors in the query. We shouldn't try to 
+        // 400 from IGDB means there's syntax errors in the query. We shouldn't try to
         // gracefully handle this. The syntax errors should just be fixed as soon as possible.
-        let errors = response.into_json_deserialize::<Vec<IgdbQueryError>>().unwrap();
+        let errors = response
+            .into_json_deserialize::<Vec<IgdbQueryError>>()
+            .unwrap();
         panic!(errors);
     }
 

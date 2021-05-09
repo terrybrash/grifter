@@ -1,5 +1,6 @@
 use crate::config::{self, Config};
 use crate::igdb;
+use crate::twitch;
 use serde::Serialize;
 use std::fmt;
 use std::fs;
@@ -23,7 +24,7 @@ impl fmt::Display for Warning {
 }
 
 pub fn games_from_config(config: &Config) -> Result<(Vec<Game>, Vec<Warning>)> {
-    let access_token = crate::twitch::authenticate(&config.client_id, &config.client_secret)
+    let access_token = twitch::authenticate(&config.client_id, &config.client_secret)
         .unwrap()
         .access_token;
 
@@ -77,29 +78,42 @@ pub struct Game {
     pub name: String,
     pub slug: String,
     pub search_names: Vec<String>,
-    pub cover: Option<String>,
     pub summary: Option<String>,
     pub genres: Vec<u64>,
     pub themes: Vec<u64>,
+
+    // MULTIPLAYER
     pub has_single_player: bool,
     pub has_coop_campaign: bool,
     pub offline_coop: Multiplayer,
     pub offline_pvp: Multiplayer,
     pub online_coop: Multiplayer,
     pub online_pvp: Multiplayer,
+
+    // MEDIA
+    pub cover: Option<String>,
     pub screenshots: Vec<String>,
     pub videos: Vec<String>,
     pub graphics: Graphics,
 
-    // DISTRIBUTION
+    // STORES
+    pub steam: Option<String>,
+    pub gog: Option<String>,
+    pub itch: Option<String>,
+    pub epic: Option<String>,
+    pub google_play: Option<String>,
+    pub apple_phone: Option<String>,
+    pub apple_pad: Option<String>,
+
+    // FILE INFO
     pub path: PathBuf,
     pub size_bytes: u64,
     pub version: Option<String>,
 }
 
-fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -> Game {
+fn game(game: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -> Game {
     const PLATFORM_WINDOWS: u64 = 6;
-    let pc_multiplayer = igdb
+    let pc_multiplayer = game
         .multiplayer_modes
         .iter()
         .find(|mode| mode.platform == Some(PLATFORM_WINDOWS) || mode.platform == None);
@@ -107,7 +121,7 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
     const GAME_MODE_SINGLE_PLAYER: u64 = 1;
     const GAME_MODE_MULTIPLAYER: u64 = 2;
     const GAME_MODE_COOP: u64 = 3;
-    let has_single_player = igdb.game_modes.contains(&GAME_MODE_SINGLE_PLAYER);
+    let has_single_player = game.game_modes.contains(&GAME_MODE_SINGLE_PLAYER);
     let has_coop_campaign;
     let offline_coop;
     let offline_pvp;
@@ -141,12 +155,12 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
         }
         None => {
             has_coop_campaign = false;
-            offline_coop = if igdb.game_modes.contains(&GAME_MODE_COOP) {
+            offline_coop = if game.game_modes.contains(&GAME_MODE_COOP) {
                 Multiplayer::Some
             } else {
                 Multiplayer::None
             };
-            offline_pvp = if igdb.game_modes.contains(&GAME_MODE_MULTIPLAYER) {
+            offline_pvp = if game.game_modes.contains(&GAME_MODE_MULTIPLAYER) {
                 Multiplayer::Some
             } else {
                 Multiplayer::None
@@ -164,7 +178,7 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
         1952,  // pixels
         16700, // pixelart
     ];
-    let keywords = igdb.keywords;
+    let keywords = game.keywords;
     let has_pixel_art_keyword = PIXEL_ART_KEYWORDS
         .iter()
         .any(|keyword| keywords.contains(keyword));
@@ -175,13 +189,13 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
     };
 
     let search_names = {
-        let alternative_names: Vec<String> = igdb
+        let alternative_names: Vec<String> = game
             .alternative_names
             .iter()
             .map(|n| n.name.clone())
             .collect();
         let is_alphanumeric = |c: &char| "abcdefghijklmnopqrstuvwxyz1234567890 ".contains(*c);
-        std::iter::once(igdb.name.clone())
+        std::iter::once(game.name.clone())
             .chain(alternative_names)
             .map(|n| {
                 n.nfkd()
@@ -202,26 +216,56 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
             .collect()
     };
 
+    let mut steam = None;
+    let mut gog = None;
+    let mut itch = None;
+    let mut epic = None;
+    let mut google_play = None;
+    let mut apple_phone = None;
+    let mut apple_pad = None;
+    for site in game.websites {
+        if !site.trusted {
+            continue;
+        }
+        match site.category {
+            igdb::WEBSITE_STEAM => steam = Some(site.url),
+            igdb::WEBSITE_GOG => gog = Some(site.url),
+            igdb::WEBSITE_ITCH => itch = Some(site.url),
+            igdb::WEBSITE_EPIC_GAMES => epic = Some(site.url),
+            igdb::WEBSITE_GOOGLE_PLAY => google_play = Some(site.url),
+            igdb::WEBSITE_APPLE_PHONE => apple_phone = Some(site.url),
+            igdb::WEBSITE_APPLE_PAD => apple_pad = Some(site.url),
+            _ => {}
+        }
+    }
+
     Game {
-        name: igdb.name,
-        slug: igdb.slug,
+        name: game.name,
+        slug: game.slug,
         search_names,
-        cover: igdb.cover.map(|cover| {
+        cover: game.cover.map(|cover| {
             format!(
                 "https://images.igdb.com/igdb/image/upload/t_cover_big/{}.png",
                 cover.image_id
             )
         }),
-        genres: igdb.genres,
-        themes: igdb.themes,
+        genres: game.genres,
+        themes: game.themes,
         has_coop_campaign,
         has_single_player,
         offline_coop,
         offline_pvp,
         online_coop,
         online_pvp,
-        summary: igdb.summary,
-        videos: igdb
+        summary: game.summary,
+        steam,
+        gog,
+        itch,
+        epic,
+        google_play,
+        apple_phone,
+        apple_pad,
+        videos: game
             .videos
             .map(|videos| {
                 videos
@@ -235,7 +279,7 @@ fn game(igdb: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
                     .collect()
             })
             .unwrap_or_default(),
-        screenshots: igdb
+        screenshots: game
             .screenshots
             .map(|screenshots| {
                 screenshots
