@@ -1,6 +1,6 @@
 # Grifter
 
-![screenshot](screenshot.png)
+[![screenshot](screenshot.png)](http://135.148.41.3:8000/)
 
 ## How to build
 
