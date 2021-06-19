@@ -47,6 +47,15 @@ pub fn start(config: &Config, games: Vec<Game>) {
         .access_token;
 
     let mut genres = igdb::get_genres(&config.client_id, &access_token).unwrap();
+    for genre in genres.iter_mut() {
+        // The names for some of these genres are ugly/verbose. Manually fixing them here.
+        match genre.id {
+            25 => genre.name = "Hack and slash".to_string(),
+            16 => genre.name = "Turn-based strategy".to_string(),
+            11 => genre.name = "Real Time Strategy".to_string(),
+            _ => {}
+        }
+    }
     genres.drain_filter(|genre| !games.iter().any(|game| game.genres.contains(&genre.id)));
     genres.sort_by(|a, b| a.name.cmp(&b.name));
 

@@ -3,13 +3,17 @@ module Page.AllGames exposing (Model, Msg(..), chunk, init, update, view)
 import Backend exposing (Game)
 import Browser.Dom
 import Css exposing (..)
-import Html.Styled exposing (Attribute, Html, a, button, div, h1, h3, img, input, label, span, text)
-import Html.Styled.Attributes as Attr exposing (css, href, placeholder, src, type_)
+import Css.Global
+import Css.Transitions as Transitions
+import Html.Styled exposing (Html, a, button, div, h1, h3, img, input, label, span, text)
+import Html.Styled.Attributes as Attr exposing (class, css, href, placeholder, src, type_)
 import Html.Styled.Events as Event
 import Html.Styled.Keyed as Keyed
 import Pagination exposing (Pagination)
 import Set exposing (Set)
-import Shared exposing (userSelectNone)
+import Shared exposing (black, fredoka, inter, rgbaFromColor, userSelectNone, white)
+import Svg.Styled as S
+import Svg.Styled.Attributes as Sa
 import Task
 import Url
 import Url.Builder exposing (Root(..))
@@ -253,19 +257,33 @@ view catalog model =
     div
         [ css
             [ property "display" "grid"
-            , property "grid-template-rows" "min-content auto"
-            , Shared.gridTemplateColumns
-            , property "grid-gap" "14px 20px"
-            , minHeight (vh 100)
-            , backgroundColor Shared.background
-            , color Shared.foreground
-            , fontFamilies [ "Manrope", "sans-serif" ]
-            , padding (px 14)
+            , property "grid-template-columns" "auto 1fr"
+            , position relative
+            , color black
+            , fontFamilies inter
+            , maxWidth (px Shared.pageWidth)
+            , marginLeft auto
+            , marginRight auto
             ]
         ]
-        [ viewTitle
-        , viewSidebar catalog model
-        , div [ css [ flexGrow (int 1), property "grid-row" "2", property "grid-column" "2" ] ]
+        [ Css.Global.global [ Css.Global.body [ backgroundColor Shared.yellow100 ] ]
+        , div
+            [ css
+                [ padding (px 30)
+                , paddingRight (px 15)
+                , property "grid-column" "1"
+                , hover [ Css.Global.descendants [ Css.Global.class "checkbox" [ opacity (num 1.0) ] ] ]
+                ]
+            ]
+            [ viewSidebar catalog model ]
+        , div
+            [ css
+                [ padding (px 30)
+                , paddingLeft (px 15)
+                , property "grid-column" "2"
+                , minWidth zero
+                ]
+            ]
             (case model.games of
                 Just games ->
                     [ viewGames games, viewPaginator games ]
@@ -281,21 +299,30 @@ viewPaginator games =
     let
         styleButton =
             [ backgroundColor transparent
-            , color Shared.foreground
-            , border3 (px 1.5) solid Shared.foreground
-            , borderRadius (px 2)
-            , width (px 32)
+            , border zero
+            , color Shared.black
+            , borderRadius (px 4)
+            , width (px 80)
             , height (px 32)
-            , margin (px 10)
+            , margin2 (px 10) (px 20)
+            , display inlineFlex
+            , alignItems center
+            , justifyContent center
             , cursor pointer
             , userSelectNone
-            , Css.disabled [ opacity (num 0.15), cursor unset ]
+            , hover [ backgroundColor (hex "e7e7e7") ]
+            , fontSize unset
+            , Css.disabled
+                [ opacity (num 0.15)
+                , cursor unset
+                , hover [ backgroundColor unset ]
+                ]
             ]
 
         attrNext =
             case Pagination.next games of
                 Just next ->
-                    [ css styleButton, Event.onClick (NextPage next) ]
+                    [ css styleButton, Event.onClick (NextPage next), Attr.title "Next page" ]
 
                 Nothing ->
                     [ css styleButton, Attr.disabled True ]
@@ -303,7 +330,7 @@ viewPaginator games =
         attrPrev =
             case Pagination.previous games of
                 Just prev ->
-                    [ css styleButton, Event.onClick (PrevPage prev) ]
+                    [ css styleButton, Event.onClick (PrevPage prev), Attr.title "Previous page" ]
 
                 Nothing ->
                     [ css styleButton, Attr.disabled True ]
@@ -314,10 +341,10 @@ viewPaginator games =
         total =
             Pagination.count games
     in
-    div [ css [ textAlign center, margin (px 32) ] ]
-        [ button attrPrev [ text "❮" ]
-        , span [] [ text ("Page " ++ String.fromInt (current + 1) ++ "/" ++ String.fromInt total) ]
-        , button attrNext [ text "❯" ]
+    div [ css [ margin (px 32), displayFlex, alignItems center, justifyContent center ] ]
+        [ button attrPrev [ div [ css [ marginRight (ch 0.5), lineHeight zero ] ] [ viewLeftAngle 13 13 ], text "Back" ]
+        , span [ css [ fontWeight (int 300) ] ] [ text ("Page " ++ String.fromInt (current + 1) ++ " of " ++ String.fromInt total) ]
+        , button attrNext [ text "Next", div [ css [ marginLeft (ch 0.5), lineHeight zero ] ] [ viewRightAngle 13 13 ] ]
         ]
 
 
@@ -333,117 +360,151 @@ viewSidebar catalog model =
                 isGenreFiltered =
                     Set.member genre.id model.mustHaveGenres
             in
-            viewFilter (\f -> FilterGenre ( genre.id, f )) genre.name isGenreFiltered
+            viewFilter (\f -> FilterGenre ( genre.id, f )) Shared.greenLight genre.name isGenreFiltered
     in
-    div [ css [ property "grid-row" "2", property "grid-column" "1" ] ]
+    div []
         [ viewSearch model.search
-        , viewFilterGroup
-            "Multiplayer"
-            [ viewFilter FilterCoopCampaign "Co-op Campaign" model.mustHaveCoopCampaign
-            , viewFilter FilterOfflineCoop "Offline Co-op" model.mustHaveOfflineCoop
-            , viewFilter FilterOfflinePvp "Offline PvP" model.mustHaveOfflinePvp
-            , viewFilter FilterOnlineCoop "Online Co-op" model.mustHaveOnlineCoop
-            , viewFilter FilterOnlinePvp "Online PvP" model.mustHaveOnlinePvp
-            , viewFilter FilterSinglePlayer "Single Player" model.mustHaveSinglePlayer
+        , viewFilterHeader Shared.blueDark "Mode"
+        , div []
+            [ viewFilter FilterCoopCampaign Shared.blueLight "Co-op Campaign" model.mustHaveCoopCampaign
+            , viewFilter FilterOfflineCoop Shared.blueLight "Offline Co-op" model.mustHaveOfflineCoop
+            , viewFilter FilterOfflinePvp Shared.blueLight "Offline PvP" model.mustHaveOfflinePvp
+            , viewFilter FilterOnlineCoop Shared.blueLight "Online Co-op" model.mustHaveOnlineCoop
+            , viewFilter FilterOnlinePvp Shared.blueLight "Online PvP" model.mustHaveOnlinePvp
+            , viewFilter FilterSinglePlayer Shared.blueLight "Single Player" model.mustHaveSinglePlayer
             ]
-        , viewFilterGroup "Genres" (List.map viewGenreFilter catalog.genres)
-        , viewFilterGroup "Stores"
-            [ viewFilter FilterSteam "Steam" model.mustHaveSteam
-            , viewFilter FilterItch "Itch.io" model.mustHaveItch
-            , viewFilter FilterGog "Gog" model.mustHaveGog
-            , viewFilter FilterEpicGames "Epic Games" model.mustHaveEpicGames
-            ]
-        ]
-
-
-viewTitle : Html msg
-viewTitle =
-    h1 [ css [ property "grid-row" "1", property "grid-column" "1" ] ] [ text "Grifter" ]
-
-
-viewSearch : String -> Html Msg
-viewSearch search =
-    input
-        [ Attr.id "search"
-        , type_ "search"
-        , placeholder "Search..."
-        , Event.onFocus (SearchFocused True)
-        , Event.onBlur (SearchFocused False)
-        , Event.onInput Search
-        , Attr.value search
-        , css
-            [ padding (px 11)
-            , border unset
-            , backgroundColor Shared.backgroundOffset
-            , borderRadius (px 2)
-            , color Shared.foreground
-            , fontSize inherit
-            , width (pct 100)
+        , viewFilterHeader Shared.greenDark "Genre"
+        , div []
+            (List.map viewGenreFilter catalog.genres)
+        , viewFilterHeader Shared.magentaDark "Store"
+        , div []
+            [ viewFilter FilterSteam Shared.magentaLight "Steam" model.mustHaveSteam
+            , viewFilter FilterItch Shared.magentaLight "Itch.io" model.mustHaveItch
+            , viewFilter FilterGog Shared.magentaLight "GOG" model.mustHaveGog
+            , viewFilter FilterEpicGames Shared.magentaLight "Epic Games" model.mustHaveEpicGames
             ]
         ]
-        []
 
 
-viewFilter : (Bool -> Msg) -> String -> Bool -> Html Msg
-viewFilter msg option isEnabled =
-    let
-        styleLabel =
+viewFilterHeader : Color -> String -> Html msg
+viewFilterHeader color_ header =
+    h3
+        [ css
+            [ marginTop (px 45)
+            , marginBottom (px 14)
+            , display inlineBlock
+            , color color_
+            ]
+        ]
+        [ text header ]
+
+
+viewFilter : (Bool -> Msg) -> Color -> String -> Bool -> Html Msg
+viewFilter msg color_ option isEnabled =
+    label
+        [ css
             [ displayFlex
             , alignItems center
             , cursor pointer
             , whiteSpace noWrap
             , userSelectNone
             , lineHeight (num 1.7)
-
-            -- Stretch the label across the entire sidebar.
-            , marginLeft (px -Shared.spacing)
-            , marginRight (px -Shared.spacing)
-            , paddingLeft (px Shared.spacing)
-            , paddingRight (px Shared.spacing)
+            , borderRadius roundedSmall
+            , position relative
+            , fontWeight (int 300)
             ]
-    in
-    label [ css styleLabel ]
-        [ checkbox [ Attr.checked isEnabled, Event.onCheck msg ]
-        , text option
+        ]
+        [ input
+            [ type_ "checkbox"
+            , Attr.checked isEnabled
+            , Event.onCheck msg
+            , css
+                [ property "appearance" "none"
+                , width (px 10)
+                , height (px 10)
+                , border3 (px 1) solid color_
+                , marginRight (px 10)
+                , cursor pointer
+                , borderRadius (px 3)
+                , boxShadow5 zero zero zero (px 0.1) color_
+                , display none
+                ]
+            ]
+            []
+        , div
+            [ class "checkbox"
+            , css
+                [ position absolute
+                , if isEnabled then
+                    opacity (num 1.0)
+
+                  else
+                    opacity (num 0.15)
+                , left zero
+                , Transitions.transition [ Transitions.opacity3 250 0 (Transitions.cubicBezier 0 1 1 1) ]
+                , textAlign center
+                , width (px 30)
+                , transform (translateX (pct -100))
+                ]
+            ]
+            [ viewCheckbox color_ isEnabled ]
+        , span [ css [ color color_ ] ] [ text option ]
         ]
 
 
-checkbox : List (Attribute msg) -> Html msg
-checkbox attributes =
-    input
-        ([ type_ "checkbox"
-         , css
-            [ verticalAlign middle
-            , property "-webkit-appearance" "none"
-            , backgroundColor unset
-            , width (px 12)
-            , height (px 12)
-            , border3 (px 1) solid Shared.foreground
-            , borderRadius (px 2)
-            , cursor inherit
-            , margin4 (px 0) (px 7) (px 0) (px 0)
-            , displayFlex
-            , color Shared.foreground
-            , alignItems center
-            , Css.checked
-                [ backgroundColor unset
-                , Css.before
-                    [ property "content" "\"✓\""
-                    , fontSize (em 1.4)
-                    , lineHeight zero
-                    , marginBottom (px 7)
-                    ]
+viewTitle : Html msg
+viewTitle =
+    h1
+        [ css
+            [ property "grid-row" "1"
+            , property "grid-column" "1"
+            , fontFamilies fredoka
+            , fontSize (em 4)
+            , textAlign center
+            , margin2 (px 20) (px 0)
+            ]
+        ]
+        [ text "guji" ]
+
+
+viewSearch : String -> Html Msg
+viewSearch search =
+    div [ css [ position relative ] ]
+        [ input
+            [ Attr.id "search"
+            , type_ "search"
+            , placeholder "Press any key to search"
+            , Event.onFocus (SearchFocused True)
+            , Event.onBlur (SearchFocused False)
+            , Event.onInput Search
+            , Attr.value search
+            , css
+                [ padding (px 15)
+                , paddingLeft (px 45)
+                , color black
+                , fontSize inherit
+                , width (ch 28)
+                , backgroundColor (hex "ececeb")
+                , border zero
+                , borderRadius (px 8)
+                , pseudoElement "placeholder"
+                    [ color (hex "a2a2a2") ]
                 ]
             ]
-         ]
-            ++ attributes
-        )
-        []
+            []
 
-
-viewFilterGroup : String -> List (Html msg) -> Html msg
-viewFilterGroup title options =
-    div [ css [ marginTop (px Shared.spacing), marginBottom (px Shared.spacing) ] ] (text title :: options)
+        -- Icon
+        , div
+            [ css
+                [ position absolute
+                , top (pct 50)
+                , left (px 15)
+                , transform (translateY (pct -50))
+                , pointerEvents none
+                ]
+            ]
+            [ viewMagnifyingGlass 16 16 (hex "a2a2a2") ]
+        ]
 
 
 
@@ -454,9 +515,8 @@ viewGames : Pagination (List Game) -> Html Msg
 viewGames games =
     Keyed.node "div"
         [ css
-            [ property "display" "grid"
-            , property "grid-template-columns" "repeat(5, 1fr)"
-            , property "grid-gap" "35px"
+            [ displayFlex
+            , flexDirection column
             ]
         ]
         (games |> Pagination.current |> Tuple.second |> List.map viewKeyedGame)
@@ -469,66 +529,85 @@ viewKeyedGame game =
 
 viewGame : Game -> Html Msg
 viewGame game =
-    let
-        styleTitle =
-            [ position absolute
-            , bottom (px 0)
-            , width (pct 100)
-            , padding4 (px 10) (px 7) (px 5) (px 7)
-            , boxSizing borderBox
-            , color Shared.foreground
-            ]
-
-        styleHighlight =
-            [ position absolute
-            , width (pct 100)
-            , height (pct 100)
-            , border3 (px 1) solid (rgb 255 255 255)
-            , borderBottom unset
-            , borderRight unset
-            , boxSizing borderBox
-            , opacity (num 0.14)
-            , property "mix-blend-mode" "luminosity"
-            , borderRadius (px 2)
-            , top zero
-            ]
-    in
     a
-        [ href ("/games/" ++ game.slug)
-        , Attr.title game.name
-        , css
-            [ paddingTop (pct (4 / 3 * 100))
+        [ css
+            [ displayFlex
+            , flexDirection row
+            , marginBottom (px 30)
             , position relative
-            , cursor pointer
-            , borderRadius (px 2)
+            , height (px 200)
             , overflow hidden
-            , backgroundColor (hex "#4c3b71")
-            , boxShadow5 (px 0) (px 2) (px 1) (px 0) (rgba 0 0 0 0.3)
-            , property "transition-duration" "0.2s"
+            , borderRadius (px 12)
             , hover
-                [ property "transform" "translateY(-10px)"
-                , boxShadow5 (px 0) (px 12) (px 6) (px 0) (hex "#00000040")
+                [ Css.Global.descendants
+                    [ Css.Global.class "name"
+                        [ opacity (num 1.0)
+                        , transform none
+                        ]
+                    ]
                 ]
             ]
+        , href ("/games/" ++ game.slug)
         ]
-        [ case game.cover of
-            Just cover ->
+        [ div
+            [ css
+                [ position absolute
+                , left (px 10)
+                , bottom (px 10)
+                , padding2 (px 10) (px 12)
+                , backgroundColor (rgba 0 0 0 0.55)
+                , color white
+                , borderRadius (px 8)
+                , property "backdrop-filter" "blur(8px)"
+                , opacity zero
+                , transform (translateX (px -10))
+                , Transitions.transition
+                    [ Transitions.opacity3 250 0 (Transitions.cubicBezier 0 1 1 1)
+                    , Transitions.transform3 250 0 (Transitions.cubicBezier 0 1 1 1)
+                    ]
+                ]
+            , class "name"
+            ]
+            [ text game.name ]
+        , div
+            [ css [ displayFlex ] ]
+            (viewScreenshots game ++ [ viewCover game ])
+        ]
+
+
+viewCover : Game -> Html msg
+viewCover game =
+    case game.cover of
+        Just cover ->
+            img
+                [ src (Url.toString cover)
+                , css [ height (pct 100) ]
+                ]
+                []
+
+        Nothing ->
+            text ""
+
+
+viewScreenshots : Game -> List (Html msg)
+viewScreenshots game =
+    game.screenshots
+        |> List.map
+            (\url ->
                 img
-                    [ src (Url.toString cover)
+                    [ src url
                     , css
-                        [ width (pct 100)
-                        , height (pct 100)
-                        , property "object-fit" "cover"
-                        , position absolute
-                        , top zero
+                        [ height (pct 100)
+                        , case game.graphics of
+                            Backend.Pixelated ->
+                                property "image-rendering" "pixelated"
+
+                            Backend.Smooth ->
+                                property "image-rendering" "unset"
                         ]
                     ]
                     []
-
-            Nothing ->
-                span [ css styleTitle ] [ text game.name ]
-        , div [ css styleHighlight ] []
-        ]
+            )
 
 
 
@@ -548,9 +627,83 @@ chunk size items =
 
 
 
+-- STYLES
+
+
+rounded =
+    px 8
+
+
+roundedSmall =
+    px 5
+
+
+
 -- GLOBALS
 
 
 gamesPerPage : Int
 gamesPerPage =
-    30
+    10
+
+
+
+-- SVG
+-- viewGamepadIcon : Html msg
+-- viewGamepadIcon =
+--     S.svg
+--         [ Sa.viewBox "0 0 399 238" ]
+--         [ S.rect [ Sa.fill "none", Sa.stroke "#000", Sa.strokeWidth "19", Sa.width "380", Sa.height "219", Sa.x "10", Sa.y "10", Sa.rx "109.5" ] []
+--         , S.path [ Sa.fill "none", Sa.stroke "#000", Sa.strokeLinecap "round", Sa.strokeWidth "18", Sa.d "M120 79v81" ] []
+--         , S.path [ Sa.fill "none", Sa.stroke "#000", Sa.strokeLinecap "round", Sa.strokeWidth "18", Sa.d "M79 119h82" ] []
+--         , S.circle [ Sa.cx "14", Sa.cy "14", Sa.r "14", Sa.transform "translate(295 75)" ] []
+--         , S.circle [ Sa.cx "14", Sa.cy "14", Sa.r "14", Sa.transform "translate(255 135)" ] []
+--         ]
+
+
+viewCheckbox : Color -> Bool -> Html msg
+viewCheckbox col isChecked =
+    let
+        rgba =
+            rgbaFromColor col
+    in
+    S.svg
+        [ Sa.viewBox "0 0 210 210", Sa.width "11", Sa.height "11" ]
+        [ if isChecked then
+            S.rect [ Sa.width "196", Sa.height "196", Sa.x "7", Sa.y "7", Sa.fill rgba, Sa.stroke rgba, Sa.strokeWidth "20", Sa.rx "60" ] []
+
+          else
+            S.rect [ Sa.width "174", Sa.height "174", Sa.x "18", Sa.y "18", Sa.fill "none", Sa.stroke rgba, Sa.strokeWidth "18", Sa.rx "50" ] []
+        , if isChecked then
+            S.path [ Sa.fill "none", Sa.stroke "#fff", Sa.strokeLinecap "round", Sa.strokeWidth "40", Sa.d "M60 105l30 30M90 135l60-60" ] []
+
+          else
+            S.g [] []
+        ]
+
+
+viewMagnifyingGlass : Float -> Float -> Color -> Html msg
+viewMagnifyingGlass width height color =
+    S.svg
+        [ Sa.viewBox "0 0 365 366", Sa.width (String.fromFloat width), Sa.height (String.fromFloat height) ]
+        [ S.circle [ Sa.cx "146", Sa.cy "146", Sa.r "129.5", Sa.fill "none", Sa.stroke (rgbaFromColor color), Sa.strokeWidth "33" ] []
+        , S.path [ Sa.fill "none", Sa.stroke (rgbaFromColor color), Sa.strokeLinecap "round", Sa.strokeWidth "33", Sa.d "M342 343L241 242" ] []
+        ]
+
+
+viewRightAngle : Float -> Float -> Html msg
+viewRightAngle width height =
+    S.svg
+        [ Sa.viewBox "0 0 146 259", Sa.width (String.fromFloat width), Sa.height (String.fromFloat height) ]
+        [ S.path [ Sa.fill "none", Sa.stroke "black", Sa.strokeLinecap "round", Sa.strokeWidth "28", Sa.d "M23 23l101 107" ] []
+        , S.path [ Sa.fill "none", Sa.stroke "black", Sa.strokeLinecap "round", Sa.strokeWidth "28", Sa.d "M23 237l101-107" ] []
+        ]
+
+
+viewLeftAngle : Float -> Float -> Html msg
+viewLeftAngle width height =
+    S.svg
+        [ Sa.viewBox "0 0 146 259", Sa.width (String.fromFloat width), Sa.height (String.fromFloat height) ]
+        [ S.path [ Sa.fill "none", Sa.stroke "black", Sa.strokeLinecap "round", Sa.strokeWidth "28", Sa.d "M124 237L23 130" ] []
+        , S.path [ Sa.fill "none", Sa.stroke "black", Sa.strokeLinecap "round", Sa.strokeWidth "28", Sa.d "M124 23L23 130" ] []
+        ]

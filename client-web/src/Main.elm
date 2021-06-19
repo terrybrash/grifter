@@ -3,11 +3,12 @@ module Main exposing (main)
 import Backend exposing (Catalog, Game, getCatalog)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
+import Css.Reset as Reset
 import Html.Styled exposing (Html, node, toUnstyled)
 import Html.Styled.Attributes exposing (href, rel)
 import Http
 import Page.AllGames exposing (Msg(..))
-import Page.SingleGame
+import Page.SingleGame exposing (Msg(..))
 import Shared
 import Url exposing (Url)
 import Url.Builder exposing (Root(..))
@@ -30,8 +31,9 @@ type Msg
     = GotCatalog (Result Http.Error Catalog)
     | ClickedLink UrlRequest
     | ChangedUrl Url
-    | MsgAllGames Page.AllGames.Msg
     | KeyDown Shared.KeyboardEvent
+    | MsgAllGames Page.AllGames.Msg
+    | MsgSingleGame Page.SingleGame.Msg
 
 
 type Page
@@ -122,6 +124,9 @@ update msg model =
             in
             ( Loaded { loaded | allGames = newModel }, Cmd.map MsgAllGames cmd )
 
+        ( MsgSingleGame GoBack, Loaded loaded ) ->
+            ( model, Browser.Navigation.back loaded.key 1 )
+
         ( ClickedLink (Browser.Internal url), Loaded loaded ) ->
             ( model, Browser.Navigation.pushUrl loaded.key (Url.toString url) )
 
@@ -188,7 +193,9 @@ view model =
                 AllGames ->
                     { title = "Grifter"
                     , body =
-                        [ linkStylesheet "https://fonts.googleapis.com/css2?family=Manrope&display=swap"
+                        [ linkStylesheet "https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap"
+                        , linkStylesheet "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+                        , Reset.meyerV2
                         , Page.AllGames.view loaded.catalog loaded.allGames |> Html.Styled.map MsgAllGames
                         ]
                     }
@@ -196,8 +203,10 @@ view model =
                 SingleGame game ->
                     { title = "Grifter - " ++ game.name
                     , body =
-                        [ linkStylesheet "https://fonts.googleapis.com/css2?family=Manrope&display=swap"
-                        , Page.SingleGame.view loaded.catalog game
+                        [ linkStylesheet "https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap"
+                        , linkStylesheet "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+                        , Reset.meyerV2
+                        , Page.SingleGame.view loaded.catalog game |> Html.Styled.map MsgSingleGame
                         ]
                     }
 

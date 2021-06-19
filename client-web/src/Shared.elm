@@ -1,13 +1,23 @@
 module Shared exposing
     ( KeyboardEvent
-    , background
-    , backgroundOffset
-    , foreground
-    , foregroundOffset
+    , black
+    , blueDark
+    , blueLight
+    , fredoka
+    , greenDark
+    , greenLight
     , gridTemplateColumns
+    , inter
+    , magentaDark
+    , magentaLight
     , onKeyDown
+    , pageWidth
     , spacing
     , userSelectNone
+    , white
+    , yellow100
+    , yellow200
+    , rgbaFromColor
     )
 
 import Browser.Events
@@ -17,9 +27,22 @@ import Json.Decode.Pipeline as D
 import Url.Builder exposing (Root(..))
 
 
+
+-- SPACING
+
+
 spacing : Float
 spacing =
     14
+
+
+pageWidth : Float
+pageWidth =
+    1300
+
+
+
+-- UTILS
 
 
 userSelectNone : Style
@@ -29,61 +52,80 @@ userSelectNone =
 
 gridTemplateColumns : Style
 gridTemplateColumns =
-    property "grid-template-columns" "250px 1000px"
+    property "grid-template-columns" "repeat(12, 1fr)"
+
+
+rgbaFromColor : Color -> String
+rgbaFromColor color =
+    "rgba(" ++ String.fromInt color.red ++ ", " ++ String.fromInt color.green ++ ", " ++ String.fromInt color.blue ++ ", " ++ String.fromFloat color.alpha ++ ")"
 
 
 
--- THEME
+-- FONTS
 
 
-type Theme
-    = Light
-    | Dark
+fredoka : List String
+fredoka =
+    [ "Fredoka One", "sans-serif" ]
 
 
-theme : Theme
-theme =
-    Dark
+inter : List String
+inter =
+    [ "Inter", "sans-serif" ]
 
 
-background : Color
-background =
-    case theme of
-        Light ->
-            rgb 221 221 221
 
-        Dark ->
-            hex "#1e1e1e"
+-- PALETTE
 
 
-backgroundOffset : Color
-backgroundOffset =
-    case theme of
-        Light ->
-            rgb 255 255 255
-
-        Dark ->
-            rgb 0 0 0
+black : Color
+black =
+    rgb 0 0 0
 
 
-foreground : Color
-foreground =
-    case theme of
-        Light ->
-            rgb 0 0 0
-
-        Dark ->
-            rgb 255 255 255
+white : Color
+white =
+    rgb 255 255 255
 
 
-foregroundOffset : Color
-foregroundOffset =
-    case theme of
-        Light ->
-            hex "#666666"
+yellow100 : Color
+yellow100 =
+    hex "fcfbf9"
 
-        Dark ->
-            hex "#9d9d9d"
+
+yellow200 : Color
+yellow200 =
+    hex "ececeb"
+
+
+blueLight : Color
+blueLight =
+    hex "0062de"
+
+
+blueDark : Color
+blueDark =
+    hex "#002475"
+
+
+magentaLight : Color
+magentaLight =
+    hex "d40074"
+
+
+magentaDark : Color
+magentaDark =
+    hex "#541730"
+
+
+greenLight : Color
+greenLight =
+    hex "007d38"
+
+
+greenDark : Color
+greenDark =
+    hex "#0d3712"
 
 
 
