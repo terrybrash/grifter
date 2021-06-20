@@ -298,20 +298,30 @@ fn game(game: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
         size_bytes: metadata.len(),
         version: {
             match title_and_version(&distribution.path.to_string_lossy()) {
-                Some((_, version)) => version,
-                None => None,
+                GameName::TitleAndVersion(_, version) => Some(version),
+                _ => None,
             }
         },
         path: PathBuf::from("/api/download").join(&distribution.path),
     }
 }
 
-fn title_and_version(string: &str) -> Option<(String, Option<String>)> {
+enum GameName {
+    None,
+    Title(String),
+    TitleAndVersion(String, String),
+}
+
+fn title_and_version(string: &str) -> GameName {
     let mut parts = string.split(|c| c == '(' || c == ')');
-    let title = parts.next();
+    let title = match parts.next().map(|t| t.trim()) {
+        Some(title) => title,
+        None => return GameName::None,
+    };
+
     let version = parts.next();
-    match title {
-        Some(title) => Some((title.trim().into(), version.map(Into::into))),
-        None => None,
+    match version {
+        Some(version) => GameName::TitleAndVersion(title.to_string(), version.to_string()),
+        None => GameName::Title(title.to_string()),
     }
 }
