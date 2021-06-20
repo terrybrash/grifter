@@ -3,6 +3,8 @@
 #![feature(drain_filter)]
 
 use config::Config;
+use std::fs;
+use std::io::Write;
 
 mod api;
 mod config;
@@ -19,10 +21,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("|___|{:>20}", format!("version {}", VERSION));
     println!();
 
-    let (config, warnings) = Config::from_file("grifter.toml")?;
-    for warning in warnings {
-        println!("Warning: {}", warning);
-    }
+    let config_filename = "grifter.toml";
+    let config_text = match fs::read_to_string(config_filename) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            let mut file = fs::File::create(config_filename)?;
+            file.write_all(config::EXAMPLE_CONFIG.as_bytes())?;
+
+            println!("It looks like this is the first time you're running grifter. Nice!!");
+            println!("I've created a \"grifter.toml\" file for you. Read it to get set up.");
+            println!("When you're done, run grifter again.");
+            return Ok(());
+        }
+        Err(err) => return Err(Box::new(err)),
+    };
+    let config = match Config::from_str(&config_text) {
+        Ok((config, warnings)) => {
+            for warning in warnings {
+                println!("Warning: {}", warning);
+            }
+            config
+        }
+        Err(crate::config::Error::BadRoot(_)) => {
+            println!(
+                "There was a problem. The \"root\" folder specified in your config doesn't exist."
+            );
+            return Ok(());
+        }
+        Err(crate::config::Error::BadToml(err)) => {
+            println!("There was a problem. The config file couldn't be parsed.");
+            println!("  {}: {}", config_filename, err);
+            println!();
+            println!("The toml docs are really helpful, check them out: https://toml.io/");
+            return Ok(());
+        }
+    };
 
     let (games, warnings) = game::games_from_config(&config)?;
     for warning in warnings {

@@ -42,11 +42,11 @@ pub fn start(config: &Config, games: Vec<Game>) {
     };
     let cors = cors_options.to_cors().unwrap();
 
-    let access_token = twitch::authenticate(&config.client_id, &config.client_secret)
+    let access_token = twitch::authenticate(&config.twitch_client_id, &config.twitch_client_secret)
         .unwrap()
         .access_token;
 
-    let mut genres = igdb::get_genres(&config.client_id, &access_token).unwrap();
+    let mut genres = igdb::get_genres(&config.twitch_client_id, &access_token).unwrap();
     for genre in genres.iter_mut() {
         // The names for some of these genres are ugly/verbose. Manually fixing them here.
         match genre.id {
@@ -59,7 +59,7 @@ pub fn start(config: &Config, games: Vec<Game>) {
     genres.drain_filter(|genre| !games.iter().any(|game| game.genres.contains(&genre.id)));
     genres.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let mut themes = igdb::get_themes(&config.client_id, &access_token).unwrap();
+    let mut themes = igdb::get_themes(&config.twitch_client_id, &access_token).unwrap();
     themes.drain_filter(|theme| !games.iter().any(|game| game.themes.contains(&theme.id)));
     themes.sort_by(|a, b| a.name.cmp(&b.name));
 

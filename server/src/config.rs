@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fmt;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use thiserror::Error;
 
 #[derive(Clone)]
 pub enum Warning {
@@ -27,6 +28,15 @@ impl fmt::Display for Warning {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("failed to parse toml")]
+    BadToml(toml::de::Error),
+
+    #[error("bad root")]
+    BadRoot(std::io::Error),
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Game {
     pub path: PathBuf,
@@ -36,23 +46,19 @@ pub struct Game {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub root: PathBuf,
-    pub client_id: String,
-    pub client_secret: String,
+    pub twitch_client_id: String,
+    pub twitch_client_secret: String,
+    #[serde(default)]
     pub games: Vec<Game>,
 }
 
 impl Config {
-    pub fn from_file<P>(path: P) -> Result<(Self, Vec<Warning>), Box<dyn std::error::Error>>
-    where
-        P: AsRef<Path>,
-    {
-        let text = fs::read_to_string(&path).unwrap_or_else(|_| panic!("Read {:?}", path.as_ref()));
-        let mut config: Config =
-            toml::from_str(&text).unwrap_or_else(|_| panic!("Parse {:?}", path.as_ref()));
+    pub fn from_str(text: &str) -> Result<(Self, Vec<Warning>), Error> {
+        let mut config: Config = toml::from_str(&text).map_err(Error::BadToml)?;
 
         // Check for executables that exist but aren't listed in the config file.
-        let unused_executables = fs::read_dir(&config.root)
-            .unwrap_or_else(|_| panic!("Expected root to be a valid directory."))
+        let root = fs::read_dir(&config.root).map_err(Error::BadRoot)?;
+        let unused_executables = root
             .filter_map(|dir_entry| match dir_entry.map(|entry| entry.file_name()) {
                 Ok(file_name) => {
                     if !config.games.iter().any(|game| game.path == file_name) {
@@ -84,6 +90,35 @@ impl Config {
         Ok((config, warnings))
     }
 }
+
+pub const EXAMPLE_CONFIG: &str =
+    "# This is the folder containing your games.\n\
+    root = '/path/to/all/my/games'\n\
+    \n\
+    # Create a new Twitch application and get the client id and secret.\n\
+    # Go here to learn how to do that: https://api-docs.igdb.com/#account-creation\n\
+    twitch_client_id = '11b084af98ea18caafcae608a9a0e89c' # This is totally fake. Replace it! \n\
+    twitch_client_secret = '11b084af98ea18caafcae608a9a0e89c' # This is totally fake. Replace it! \n\
+    \n\
+    # Now, list all of your games below, each beginning with a `[[games]]` and\n\
+    # containing both the \"path\" and the \"slug\" for each game.\n\
+    # - \"path\" is the filename of the game, relative to \"root\". It can be nested within a folder.\n\
+    # - \"slug\" is the IGDB id, otherwise known as a slug.\n\
+    \n\
+    # I've put some example games here:\n\
+    \n\
+    # [[games]]\n\
+    # path = 'Cave Story.zip'\n\
+    # slug = 'cave-story'\n\
+    \n\
+    # [[games]]\n\
+    # path = 'Diablo 2, Lord of Destruction.exe'\n\
+    # slug = 'diablo-ii'\n\
+    \n\
+    # [[games]]\n\
+    # path = 'The Witness.zip'\n\
+    # slug = 'the-witness'\n\
+    ";
 
 fn drain_duplicates(games: &mut Vec<Game>) -> Vec<Vec<Game>> {
     let mut slugs_by_count: HashMap<String, usize> = HashMap::new();
