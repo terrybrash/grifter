@@ -192,11 +192,11 @@ viewInfo game genres modes stores =
         [ -- Cover art
           case game.cover of
             Just cover ->
-                Html.img [ Attr.src (Url.toString cover), css [ display block, width (pct 100) ] ] []
+                Html.img [ Attr.src (Url.toString cover), css [ display block, width (pct 100), marginBottom (em 1) ] ] []
 
             Nothing ->
-                Html.div [] []
-        , Html.div [ css [ marginTop (em 1) ] ]
+                Html.text ""
+        , Html.div [ css [ marginBottom (em 1) ] ]
             [ Html.div [] (List.map (\text -> Html.div [ css [ color Shared.blueLight ] ] [ Html.text text ]) modes)
             , Html.div [] (List.map (\text -> Html.div [ css [ color Shared.greenLight ] ] [ Html.text text ]) genres)
             , Html.div []
@@ -216,7 +216,7 @@ viewInfo game genres modes stores =
             ]
 
         -- Summary
-        , Html.p [ css [ color (hsl 0 0 0.32), marginTop (em 1), fontWeight (int 300) ] ]
+        , Html.p [ css [ color (hsl 0 0 0.32), marginBottom (em 1), fontWeight (int 300) ] ]
             [ case game.summary of
                 Just summary ->
                     Html.text summary
