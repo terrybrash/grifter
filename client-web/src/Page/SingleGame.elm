@@ -36,6 +36,7 @@ view catalog game =
                 , Maybe.map (\url -> ( "Google Play", url )) game.googlePlay
                 , Maybe.map (\url -> ( "Apple iPhone", url )) game.applePhone
                 , Maybe.map (\url -> ( "Apple iPad", url )) game.applePad
+                , Maybe.map (\url -> ( "IGDB", url )) (Url.fromString ("https://www.igdb.com/games/" ++ game.slug))
                 ]
 
         modes : List String
