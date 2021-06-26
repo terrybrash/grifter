@@ -79,7 +79,7 @@ pub fn start(config: &Config, last_request: &mut std::time::Instant, games: Vec<
     rocket::ignite()
         .attach(cors)
         .manage(model)
-        .mount("/", routes![get_index, get_anything, get_catalog])
+        .mount("/", routes![get_index, get_favicon, get_anything, get_catalog])
         .mount("/api/download", StaticFiles::from(&config.root).rank(-2))
         .launch();
 }
@@ -106,6 +106,11 @@ fn get_index(model: State<Model>) -> EncodedContent<Vec<u8>> {
         CacheControl(vec![CacheDirective::MaxAge(60 * 2)]),
         model.index.clone(),
     )
+}
+
+#[get("/favicon.ico")]
+fn get_favicon() -> &'static [u8] {
+    include_bytes!("../favicon.ico")
 }
 
 #[get("/<_path..>")]

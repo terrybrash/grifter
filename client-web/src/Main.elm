@@ -201,7 +201,7 @@ view model =
                     }
 
                 SingleGame game ->
-                    { title = "Grifter - " ++ game.name
+                    { title = game.name ++ " - " ++ "Grifter"
                     , body =
                         [ linkStylesheet "https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap"
                         , linkStylesheet "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
