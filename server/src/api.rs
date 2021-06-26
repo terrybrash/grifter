@@ -35,7 +35,7 @@ struct Catalog {
     themes: Vec<igdb::Theme>,
 }
 
-pub fn start(config: &Config, games: Vec<Game>) {
+pub fn start(config: &Config, last_request: &mut std::time::Instant, games: Vec<Game>) {
     let cors_options = CorsOptions {
         allowed_origins: AllowedOrigins::All,
         ..Default::default()
@@ -46,7 +46,8 @@ pub fn start(config: &Config, games: Vec<Game>) {
         .unwrap()
         .access_token;
 
-    let mut genres = igdb::get_genres(&config.twitch_client_id, &access_token).unwrap();
+    let mut genres =
+        igdb::get_genres(&config.twitch_client_id, &access_token, last_request).unwrap();
     for genre in genres.iter_mut() {
         // The names for some of these genres are ugly/verbose. Manually fixing them here.
         match genre.id {
@@ -59,7 +60,8 @@ pub fn start(config: &Config, games: Vec<Game>) {
     genres.drain_filter(|genre| !games.iter().any(|game| game.genres.contains(&genre.id)));
     genres.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let mut themes = igdb::get_themes(&config.twitch_client_id, &access_token).unwrap();
+    let mut themes =
+        igdb::get_themes(&config.twitch_client_id, &access_token, last_request).unwrap();
     themes.drain_filter(|theme| !games.iter().any(|game| game.themes.contains(&theme.id)));
     themes.sort_by(|a, b| a.name.cmp(&b.name));
 

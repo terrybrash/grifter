@@ -1,5 +1,6 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashSet;
+use std::time::{Duration, Instant};
 use ureq::post;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -119,17 +120,33 @@ pub enum Error {
 }
 
 const IGDB_ENDPOINT: &str = "https://api.igdb.com/v4";
-const IGDB_QUERY_LIMIT: usize = 500;
+const IGDB_QUERY_LIMIT: usize = 500; // https://api-docs.igdb.com/#pagination
+const IGDB_REQUEST_COOLDOWN: u64 = 250; // https://api-docs.igdb.com/#rate-limits
 
-pub fn get_games<T>(client_id: &str, access_token: &str, slugs: &[T]) -> Result<Vec<Game>, Error>
+pub fn get_games<T>(
+    client_id: &str,
+    access_token: &str,
+    last_request: &mut Instant,
+    slugs: &[T],
+) -> Result<Vec<Game>, Error>
 where
     T: std::fmt::Display,
 {
     if slugs.is_empty() {
         Ok(vec![])
     } else if slugs.len() > IGDB_QUERY_LIMIT {
-        let head = get_games(client_id, access_token, &slugs[0..IGDB_QUERY_LIMIT]);
-        let tail = get_games(client_id, access_token, &slugs[IGDB_QUERY_LIMIT..]);
+        let head = get_games(
+            client_id,
+            access_token,
+            last_request,
+            &slugs[0..IGDB_QUERY_LIMIT],
+        );
+        let tail = get_games(
+            client_id,
+            access_token,
+            last_request,
+            &slugs[IGDB_QUERY_LIMIT..],
+        );
         match (head, tail) {
             (Ok(head), Ok(tail)) => Ok([head, tail].concat()),
             (err @ Err(_), _) | (_, err @ Err(_)) => err,
@@ -168,16 +185,23 @@ where
             limit = IGDB_QUERY_LIMIT
         );
 
+        sleep_for_cooldown(last_request);
         let response = post(&format!("{}/games", IGDB_ENDPOINT))
             .set("client-id", client_id)
             .auth_kind("Bearer", access_token)
             .send_string(&query);
 
+        *last_request = Instant::now();
         handle_response(response)
     }
 }
 
-pub fn get_genres(client_id: &str, access_token: &str) -> Result<Vec<Genre>, Error> {
+pub fn get_genres(
+    client_id: &str,
+    access_token: &str,
+    last_request: &mut Instant,
+) -> Result<Vec<Genre>, Error> {
+    sleep_for_cooldown(last_request);
     let response = post(&format!("{}/genres", IGDB_ENDPOINT))
         .set("client-id", client_id)
         .auth_kind("Bearer", access_token)
@@ -186,11 +210,16 @@ pub fn get_genres(client_id: &str, access_token: &str) -> Result<Vec<Genre>, Err
             IGDB_QUERY_LIMIT
         ));
 
+    *last_request = Instant::now();
     handle_response(response)
 }
 
-pub fn get_themes(client_id: &str, access_token: &str) -> Result<Vec<Theme>, Error> {
-    println!("{}", access_token);
+pub fn get_themes(
+    client_id: &str,
+    access_token: &str,
+    last_request: &mut Instant,
+) -> Result<Vec<Theme>, Error> {
+    sleep_for_cooldown(last_request);
     let response = post(&format!("{}/themes", IGDB_ENDPOINT))
         .set("client-id", client_id)
         .auth_kind("Bearer", access_token)
@@ -199,7 +228,16 @@ pub fn get_themes(client_id: &str, access_token: &str) -> Result<Vec<Theme>, Err
             IGDB_QUERY_LIMIT
         ));
 
+    *last_request = Instant::now();
     handle_response(response)
+}
+
+fn sleep_for_cooldown(last_request: &Instant) {
+    let cooldown = Duration::from_millis(IGDB_REQUEST_COOLDOWN);
+    let elapsed = last_request.elapsed();
+    if cooldown > elapsed {
+        std::thread::sleep(cooldown - elapsed)
+    }
 }
 
 #[derive(Deserialize)]

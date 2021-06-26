@@ -57,13 +57,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let (games, warnings) = game::games_from_config(&config)?;
+    let mut last_request = std::time::Instant::now();
+    let (games, warnings) = game::games_from_config(&config, &mut last_request)?;
     for warning in warnings {
         println!("Warning: {}", warning);
     }
 
     println!("Indexed {} games.", games.len());
 
-    api::start(&config, games);
+    api::start(&config, &mut last_request, games);
     Ok(())
 }

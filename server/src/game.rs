@@ -23,13 +23,13 @@ impl fmt::Display for Warning {
     }
 }
 
-pub fn games_from_config(config: &Config) -> Result<(Vec<Game>, Vec<Warning>)> {
+pub fn games_from_config(config: &Config, last_request: &mut std::time::Instant) -> Result<(Vec<Game>, Vec<Warning>)> {
     let access_token = twitch::authenticate(&config.twitch_client_id, &config.twitch_client_secret)
         .unwrap()
         .access_token;
 
     let slugs: Vec<&str> = config.games.iter().map(|g| g.slug.as_str()).collect();
-    let mut games: Vec<Game> = igdb::get_games(&config.twitch_client_id, &access_token, &slugs)
+    let mut games: Vec<Game> = igdb::get_games(&config.twitch_client_id, &access_token, last_request, &slugs)
         .unwrap()
         .into_iter()
         .map(|igdb_game| {
