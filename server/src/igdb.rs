@@ -208,7 +208,7 @@ struct IgdbAuthError {
     message: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct IgdbQueryError {
     pub title: String,
     pub status: u16,
@@ -235,7 +235,7 @@ where
         let errors = response
             .into_json_deserialize::<Vec<IgdbQueryError>>()
             .unwrap();
-        panic!(errors);
+        panic!("{:?}", errors);
     }
 
     Ok(response.into_json_deserialize().unwrap())
