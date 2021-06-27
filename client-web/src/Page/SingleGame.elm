@@ -155,7 +155,7 @@ viewDownload game =
             ]
         ]
         [ Html.a
-            [ Attr.href game.path
+            [ Attr.href ("/api/download/" ++ game.slug)
             , Attr.download ""
             , css
                 [ border3 (px 2) solid Shared.black

@@ -116,7 +116,7 @@ fn print_how_to_install_uglifyjs() {
 fn print_how_to_install_elm() {
     eprintln!("I tried to run 'elm' but couldn't find it!");
     eprintln!("Elm is really easy to install. It's just a single binary.");
-    eprintln!("Go to this link and either (1) download the binary, or (2) run the installer.");
+    eprintln!("Go to the link below and either download the binary, or run the installer.");
     eprintln!("https://github.com/elm/compiler/releases/tag/0.19.1");
 }
 

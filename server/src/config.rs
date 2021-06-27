@@ -1,8 +1,9 @@
+use async_std::fs;
+use async_std::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fmt;
-use std::fs;
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -53,11 +54,11 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_str(text: &str) -> Result<(Self, Vec<Warning>), Error> {
-        let mut config: Config = toml::from_str(&text).map_err(Error::BadToml)?;
+    pub async fn from_str(text: &str) -> Result<(Self, Vec<Warning>), Error> {
+        let mut config: Config = toml::from_str(text).map_err(Error::BadToml)?;
 
         // Check for executables that exist but aren't listed in the config file.
-        let root = fs::read_dir(&config.root).map_err(Error::BadRoot)?;
+        let root = fs::read_dir(&config.root).await.map_err(Error::BadRoot)?;
         let unused_executables = root
             .filter_map(|dir_entry| match dir_entry.map(|entry| entry.file_name()) {
                 Ok(file_name) => {
@@ -70,7 +71,8 @@ impl Config {
                 Err(_) => panic!(),
             })
             .map(Warning::UnusedExe)
-            .collect();
+            .collect()
+            .await;
 
         // Check for missing executables.
         let root = &mut config.root;
@@ -84,7 +86,7 @@ impl Config {
         let conflicting_games = drain_duplicates(&mut config.games)
             .into_iter()
             .map(Warning::ConflictingGames)
-            .collect();
+            .collect::<Vec<_>>();
 
         let warnings = [unused_executables, conflicting_games, missing_games].concat();
         Ok((config, warnings))

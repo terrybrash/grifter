@@ -1,7 +1,7 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
-use ureq::post;
+use surf::post;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Cover {
@@ -116,14 +116,14 @@ pub struct Game {
 
 #[derive(Debug)]
 pub enum Error {
-    Auth(u16, String),
+    Auth(surf::StatusCode, String),
 }
 
 const IGDB_ENDPOINT: &str = "https://api.igdb.com/v4";
 const IGDB_QUERY_LIMIT: usize = 500; // https://api-docs.igdb.com/#pagination
 const IGDB_REQUEST_COOLDOWN: u64 = 250; // https://api-docs.igdb.com/#rate-limits
 
-pub fn get_games<T>(
+pub async fn get_games<T>(
     client_id: &str,
     access_token: &str,
     last_request: &mut Instant,
@@ -132,32 +132,16 @@ pub fn get_games<T>(
 where
     T: std::fmt::Display,
 {
-    if slugs.is_empty() {
-        Ok(vec![])
-    } else if slugs.len() > IGDB_QUERY_LIMIT {
-        let head = get_games(
-            client_id,
-            access_token,
-            last_request,
-            &slugs[0..IGDB_QUERY_LIMIT],
-        );
-        let tail = get_games(
-            client_id,
-            access_token,
-            last_request,
-            &slugs[IGDB_QUERY_LIMIT..],
-        );
-        match (head, tail) {
-            (Ok(head), Ok(tail)) => Ok([head, tail].concat()),
-            (err @ Err(_), _) | (_, err @ Err(_)) => err,
-        }
-    } else {
-        let conditions = slugs
+    let mut requests = 0;
+    let mut games: Vec<Game> = Vec::with_capacity(slugs.len());
+    while requests * IGDB_QUERY_LIMIT < slugs.len() {
+        let start = requests * IGDB_QUERY_LIMIT;
+        let end = usize::min((requests + 1) * IGDB_QUERY_LIMIT, slugs.len());
+        let conditions = slugs[start..end]
             .iter()
             .map(|s| format!("slug = \"{}\"", &s))
             .collect::<Vec<String>>()
             .join(" | ");
-
         let fields = [
             "id",
             "slug",
@@ -177,66 +161,73 @@ where
             "websites.trusted",
             "websites.url",
         ];
-
         let query = format!(
             "fields {fields}; where {conditions}; limit {limit};",
             fields = fields.join(", "),
             conditions = conditions,
             limit = IGDB_QUERY_LIMIT
         );
-
-        sleep_for_cooldown(last_request);
-        let response = post(&format!("{}/games", IGDB_ENDPOINT))
-            .set("client-id", client_id)
-            .auth_kind("Bearer", access_token)
-            .send_string(&query);
+        sleep_for_cooldown(last_request).await;
+        let mut response = post(&format!("{}/games", IGDB_ENDPOINT))
+            .header("client-id", client_id)
+            .header("authorization", format!("Bearer {}", access_token))
+            .body(query)
+            .send()
+            .await
+            .unwrap();
 
         *last_request = Instant::now();
-        handle_response(response)
+        let mut queried_games: Vec<Game> = handle_response(&mut response).await?;
+        games.append(&mut queried_games);
+        requests += 1;
     }
+
+    Ok(games)
 }
 
-pub fn get_genres(
+pub async fn get_genres(
     client_id: &str,
     access_token: &str,
     last_request: &mut Instant,
 ) -> Result<Vec<Genre>, Error> {
-    sleep_for_cooldown(last_request);
-    let response = post(&format!("{}/genres", IGDB_ENDPOINT))
-        .set("client-id", client_id)
-        .auth_kind("Bearer", access_token)
-        .send_string(&format!(
-            "fields id, name, slug; limit {};",
-            IGDB_QUERY_LIMIT
-        ));
+    sleep_for_cooldown(last_request).await;
+    let query = format!("fields id, name, slug; limit {};", IGDB_QUERY_LIMIT);
+    let mut response = post(&format!("{}/genres", IGDB_ENDPOINT))
+        .header("client-id", client_id)
+        .header("authorization", format!("Bearer {}", access_token))
+        .body(query)
+        .send()
+        .await
+        .unwrap();
 
     *last_request = Instant::now();
-    handle_response(response)
+    handle_response(&mut response).await
 }
 
-pub fn get_themes(
+pub async fn get_themes(
     client_id: &str,
     access_token: &str,
     last_request: &mut Instant,
 ) -> Result<Vec<Theme>, Error> {
-    sleep_for_cooldown(last_request);
-    let response = post(&format!("{}/themes", IGDB_ENDPOINT))
-        .set("client-id", client_id)
-        .auth_kind("Bearer", access_token)
-        .send_string(&format!(
-            "fields id, name, slug; limit {};",
-            IGDB_QUERY_LIMIT
-        ));
+    sleep_for_cooldown(last_request).await;
+    let query = format!("fields id, name, slug; limit {};", IGDB_QUERY_LIMIT);
+    let mut response = post(&format!("{}/themes", IGDB_ENDPOINT))
+        .header("client-id", client_id)
+        .header("authorization", format!("Bearer {}", access_token))
+        .body(query)
+        .send()
+        .await
+        .unwrap();
 
     *last_request = Instant::now();
-    handle_response(response)
+    handle_response(&mut response).await
 }
 
-fn sleep_for_cooldown(last_request: &Instant) {
+async fn sleep_for_cooldown(last_request: &Instant) {
     let cooldown = Duration::from_millis(IGDB_REQUEST_COOLDOWN);
     let elapsed = last_request.elapsed();
     if cooldown > elapsed {
-        std::thread::sleep(cooldown - elapsed)
+        async_std::task::sleep(cooldown - elapsed).await;
     }
 }
 
@@ -253,28 +244,37 @@ struct IgdbQueryError {
     pub cause: String,
 }
 
-fn handle_response<T>(response: ureq::Response) -> Result<T, Error>
+async fn handle_response<T>(response: &mut surf::Response) -> Result<T, Error>
 where
     T: DeserializeOwned,
 {
-    if response.status() == 401 || response.status() == 403 {
-        let code = response.status();
-        let error = response.into_json_deserialize::<IgdbAuthError>();
+    let code = response.status();
+    let body = response.body_string().await.unwrap();
+
+    if code == 401 || code == 403 {
+        let error: serde_json::Result<IgdbAuthError> = serde_json::from_str(&body);
         let message = match error {
             Ok(error) => error.message,
             Err(_) => String::new(),
         };
-        return Err(Error::Auth(code, message));
-    }
-
-    if response.status() == 400 {
+        Err(Error::Auth(code, message))
+    } else if code == 400 {
         // 400 from IGDB means there's syntax errors in the query. We shouldn't try to
         // gracefully handle this. The syntax errors should just be fixed as soon as possible.
-        let errors = response
-            .into_json_deserialize::<Vec<IgdbQueryError>>()
-            .unwrap();
+        let errors: Vec<IgdbQueryError> = serde_json::from_str(&body).unwrap();
         panic!("{:?}", errors);
+    } else {
+        let data: serde_json::Result<T> = serde_json::from_str(&body);
+        match data {
+            Ok(data) => Ok(data),
+            Err(err) => {
+                println!("{}", err);
+                println!();
+                for line in body.lines().skip(err.line()).take(10) {
+                    println!("{}", line);
+                }
+                panic!()
+            }
+        }
     }
-
-    Ok(response.into_json_deserialize().unwrap())
 }

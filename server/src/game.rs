@@ -1,9 +1,10 @@
 use crate::config::{self, Config};
 use crate::igdb;
 use crate::twitch;
+use async_std::fs;
+use futures::future::join_all;
 use serde::Serialize;
 use std::fmt;
-use std::fs;
 use std::path::PathBuf;
 use unicode_normalization::UnicodeNormalization;
 
@@ -23,25 +24,36 @@ impl fmt::Display for Warning {
     }
 }
 
-pub fn games_from_config(config: &Config, last_request: &mut std::time::Instant) -> Result<(Vec<Game>, Vec<Warning>)> {
+pub async fn games_from_config(
+    config: &Config,
+    last_request: &mut std::time::Instant,
+) -> Result<(Vec<Game>, Vec<Warning>)> {
     let access_token = twitch::authenticate(&config.twitch_client_id, &config.twitch_client_secret)
         .unwrap()
         .access_token;
 
     let slugs: Vec<&str> = config.games.iter().map(|g| g.slug.as_str()).collect();
-    let mut games: Vec<Game> = igdb::get_games(&config.twitch_client_id, &access_token, last_request, &slugs)
-        .unwrap()
-        .into_iter()
-        .map(|igdb_game| {
-            let g = config
-                .games
-                .iter()
-                .find(|i| i.slug == igdb_game.slug)
-                .unwrap();
-            let metadata = fs::metadata(config.root.join(&g.path)).unwrap();
-            game(igdb_game, g, metadata)
-        })
-        .collect();
+    let igdb_games = igdb::get_games(
+        &config.twitch_client_id,
+        &access_token,
+        last_request,
+        &slugs,
+    )
+    .await
+    .unwrap();
+
+    let games = igdb_games.into_iter().map(|igdb_game| async {
+        let g = config
+            .games
+            .iter()
+            .find(|i| i.slug == igdb_game.slug)
+            .unwrap();
+        let metadata = fs::metadata(config.root.join(&g.path)).await.unwrap();
+        game(igdb_game, g, metadata, config)
+    });
+
+    let mut games: Vec<Game> = join_all(games).await;
+
     games.sort_by(|a, b| a.name.cmp(&b.name));
 
     let warnings = config
@@ -111,7 +123,12 @@ pub struct Game {
     pub version: Option<String>,
 }
 
-fn game(game: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -> Game {
+fn game(
+    game: igdb::Game,
+    distribution: &config::Game,
+    metadata: fs::Metadata,
+    config: &config::Config,
+) -> Game {
     const PLATFORM_WINDOWS: u64 = 6;
     let pc_multiplayer = game
         .multiplayer_modes
@@ -302,7 +319,7 @@ fn game(game: igdb::Game, distribution: &config::Game, metadata: fs::Metadata) -
                 _ => None,
             }
         },
-        path: PathBuf::from("/api/download").join(&distribution.path),
+        path: config.root.join(&distribution.path),
     }
 }
 
