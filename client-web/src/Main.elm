@@ -1,5 +1,6 @@
 module Main exposing (main)
 
+import AllGames exposing (Msg(..))
 import Backend exposing (Catalog, Game, getCatalog)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
@@ -7,9 +8,8 @@ import Css.Reset as Reset
 import Html.Styled exposing (Html, node, toUnstyled)
 import Html.Styled.Attributes exposing (href, rel)
 import Http
-import Page.AllGames exposing (Msg(..))
-import Page.SingleGame exposing (Msg(..))
 import Shared
+import SingleGame exposing (Msg(..))
 import Url exposing (Url)
 import Url.Builder exposing (Root(..))
 import Url.Parser exposing ((</>))
@@ -32,8 +32,8 @@ type Msg
     | ClickedLink UrlRequest
     | ChangedUrl Url
     | KeyDown Shared.KeyboardEvent
-    | MsgAllGames Page.AllGames.Msg
-    | MsgSingleGame Page.SingleGame.Msg
+    | MsgAllGames AllGames.Msg
+    | MsgSingleGame SingleGame.Msg
 
 
 type Page
@@ -50,7 +50,7 @@ type Model
         , route : Route
         , page : Page
         , catalog : Catalog
-        , allGames : Page.AllGames.Model
+        , allGames : AllGames.Model
         }
 
 
@@ -86,7 +86,7 @@ update msg model =
                         { key = loading.key
                         , route = loading.route
                         , page = AllGames
-                        , allGames = Page.AllGames.init catalog
+                        , allGames = AllGames.init catalog
                         , catalog = catalog
                         }
                     , Cmd.none
@@ -99,7 +99,7 @@ update msg model =
                                 { key = loading.key
                                 , route = loading.route
                                 , page = SingleGame game
-                                , allGames = Page.AllGames.init catalog
+                                , allGames = AllGames.init catalog
                                 , catalog = catalog
                                 }
                             , Cmd.none
@@ -120,7 +120,7 @@ update msg model =
         ( MsgAllGames msg_, Loaded loaded ) ->
             let
                 ( newModel, cmd ) =
-                    Page.AllGames.update loaded.catalog msg_ loaded.allGames
+                    AllGames.update loaded.catalog msg_ loaded.allGames
             in
             ( Loaded { loaded | allGames = newModel }, Cmd.map MsgAllGames cmd )
 
@@ -152,7 +152,7 @@ update msg model =
         ( KeyDown event, Loaded loaded ) ->
             case loaded.page of
                 AllGames ->
-                    update (MsgAllGames (Page.AllGames.KeyDown event)) model
+                    update (MsgAllGames (AllGames.KeyDown event)) model
 
                 _ ->
                     ( model, Cmd.none )
@@ -196,7 +196,7 @@ view model =
                         [ linkStylesheet "https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap"
                         , linkStylesheet "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
                         , Reset.meyerV2
-                        , Page.AllGames.view loaded.catalog loaded.allGames |> Html.Styled.map MsgAllGames
+                        , AllGames.view loaded.catalog loaded.allGames |> Html.Styled.map MsgAllGames
                         ]
                     }
 
@@ -206,7 +206,7 @@ view model =
                         [ linkStylesheet "https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap"
                         , linkStylesheet "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
                         , Reset.meyerV2
-                        , Page.SingleGame.view loaded.catalog game |> Html.Styled.map MsgSingleGame
+                        , SingleGame.view loaded.catalog game |> Html.Styled.map MsgSingleGame
                         ]
                     }
 

@@ -1,4 +1,4 @@
-module Page.SingleGame exposing (Msg(..), view)
+module SingleGame exposing (Msg(..), view)
 
 import Backend
 import Css exposing (..)
@@ -179,8 +179,12 @@ viewDownload game =
 
 formatBytes : Int -> String
 formatBytes bytes =
-    if bytes > 1000000000 then
-        String.fromFloat (toFloat (Basics.round ((toFloat bytes / 1000000000) * 10)) / 10) ++ " GB"
+    let
+        gigabyte =
+            1000000000
+    in
+    if bytes >= gigabyte then
+        String.fromFloat (toFloat (Basics.round ((toFloat bytes / gigabyte) * 10)) / 10) ++ " GB"
 
     else
         String.fromInt (Basics.round (toFloat bytes / 1000000)) ++ " MB"
