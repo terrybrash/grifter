@@ -85,6 +85,13 @@ pub enum Graphics {
 }
 
 #[derive(Debug, Serialize, Clone)]
+pub struct Image {
+    pub id: String,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Serialize, Clone)]
 pub struct Game {
     // INFO
     pub name: String,
@@ -103,8 +110,8 @@ pub struct Game {
     pub online_pvp: Multiplayer,
 
     // MEDIA
-    pub cover: Option<String>,
-    pub screenshots: Vec<String>,
+    pub cover: Option<Image>,
+    pub screenshots: Vec<Image>,
     pub videos: Vec<String>,
     pub graphics: Graphics,
 
@@ -260,11 +267,10 @@ fn game(
         name: game.name,
         slug: game.slug,
         search_names,
-        cover: game.cover.map(|cover| {
-            format!(
-                "https://images.igdb.com/igdb/image/upload/t_cover_big/{}.png",
-                cover.image_id
-            )
+        cover: game.cover.map(|cover| Image {
+            id: cover.image_id,
+            width: cover.width,
+            height: cover.height,
         }),
         genres: game.genres,
         themes: game.themes,
@@ -284,32 +290,23 @@ fn game(
         apple_pad,
         videos: game
             .videos
-            .map(|videos| {
-                videos
-                    .iter()
-                    .map(|v| {
-                        format!(
-                            "https://www.youtube-nocookie.com/embed/{}?modestbranding=1",
-                            v.video_id
-                        )
-                    })
-                    .collect()
+            .iter()
+            .map(|v| {
+                format!(
+                    "https://www.youtube-nocookie.com/embed/{}?modestbranding=1",
+                    v.video_id
+                )
             })
-            .unwrap_or_default(),
+            .collect(),
         screenshots: game
             .screenshots
-            .map(|screenshots| {
-                screenshots
-                    .iter()
-                    .map(|ss| {
-                        format!(
-                            "https://images.igdb.com/igdb/image/upload/t_original/{}.jpg",
-                            ss.image_id
-                        )
-                    })
-                    .collect()
+            .iter()
+            .map(|screenshot| Image {
+                id: screenshot.image_id.clone(),
+                width: screenshot.width,
+                height: screenshot.height,
             })
-            .unwrap_or_default(),
+            .collect(),
         graphics,
 
         size_bytes: metadata.len(),

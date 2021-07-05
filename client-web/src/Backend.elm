@@ -3,6 +3,7 @@ module Backend exposing
     , Game
     , Genre
     , Graphics(..)
+    , Image
     , Multiplayer(..)
     , Theme
     , getCatalog
@@ -63,8 +64,8 @@ type alias Game =
     , onlinePvp : Multiplayer
 
     -- Media
-    , cover : Maybe Url
-    , screenshots : List String
+    , cover : Maybe Image
+    , screenshots : List Image
     , videos : List String
     , graphics : Graphics
 
@@ -101,8 +102,8 @@ decodeGame =
         |> required "online_coop" decodeMultiplayer
         |> required "online_pvp" decodeMultiplayer
         -- Media
-        |> required "cover" (nullable decodeUrl)
-        |> required "screenshots" (list string)
+        |> required "cover" (nullable decodeImage)
+        |> required "screenshots" (list decodeImage)
         |> required "videos" (list string)
         |> required "graphics" decodeGraphics
         -- Stores
@@ -117,6 +118,21 @@ decodeGame =
         |> required "path" string
         |> required "size_bytes" int
         |> required "version" (nullable string)
+
+
+type alias Image =
+    { id : String
+    , width : Int
+    , height : Int
+    }
+
+
+decodeImage : Decoder Image
+decodeImage =
+    Decode.succeed Image
+        |> required "id" string
+        |> required "width" int
+        |> required "height" int
 
 
 type alias Theme =

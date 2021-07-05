@@ -15,7 +15,6 @@ import Shared exposing (black, fredoka, inter, rgbaFromColor, userSelectNone, wh
 import Svg.Styled as S
 import Svg.Styled.Attributes as Sa
 import Task
-import Url
 import Url.Builder exposing (Root(..))
 
 
@@ -538,6 +537,8 @@ viewGame game =
             , height (px 200)
             , overflow hidden
             , borderRadius (px 12)
+            , maxWidth (pct 100)
+            , property "width" "min-content"
             , hover
                 [ Css.Global.descendants
                     [ Css.Global.class "name"
@@ -580,8 +581,10 @@ viewCover game =
     case game.cover of
         Just cover ->
             img
-                [ src (Url.toString cover)
-                , css [ height (pct 100) ]
+                [ src ("/api/image/" ++ cover.id ++ "?h=400")
+                , Attr.width cover.width
+                , Attr.height cover.height
+                , css [ height (pct 100), width auto ]
                 ]
                 []
 
@@ -593,11 +596,14 @@ viewScreenshots : Game -> List (Html msg)
 viewScreenshots game =
     game.screenshots
         |> List.map
-            (\url ->
+            (\image ->
                 img
-                    [ src url
+                    [ src ("/api/image/" ++ image.id ++ "?h=400")
+                    , Attr.width image.width
+                    , Attr.height image.height
                     , css
                         [ height (pct 100)
+                        , width auto
                         , case game.graphics of
                             Backend.Pixelated ->
                                 property "image-rendering" "pixelated"

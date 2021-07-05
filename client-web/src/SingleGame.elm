@@ -196,7 +196,13 @@ viewInfo game genres modes stores =
         [ -- Cover art
           case game.cover of
             Just cover ->
-                Html.img [ Attr.src (Url.toString cover), css [ display block, width (pct 100), marginBottom (em 1) ] ] []
+                Html.img
+                    [ Attr.src ("/api/image/" ++ cover.id)
+                    , Attr.width cover.width
+                    , Attr.height cover.height
+                    , css [ display block, width (pct 100), height auto, marginBottom (em 1) ]
+                    ]
+                    []
 
             Nothing ->
                 Html.text ""
@@ -247,7 +253,7 @@ viewMedia game =
         )
 
 
-viewScreenshot : Backend.Game -> String -> Html msg
+viewScreenshot : Backend.Game -> Backend.Image -> Html msg
 viewScreenshot game screenshot =
     Html.div
         [ css
@@ -255,14 +261,16 @@ viewScreenshot game screenshot =
             , borderRadius (px 3)
             , displayFlex
             , alignItems center
-            , backgroundColor (rgb 0 0 0)
             ]
         ]
         [ Html.img
-            [ Attr.src screenshot
+            [ Attr.src ("/api/image/" ++ screenshot.id)
+            , Attr.width screenshot.width
+            , Attr.height screenshot.height
             , css
                 [ display block
                 , width (pct 100)
+                , height auto
                 , case game.graphics of
                     Backend.Pixelated ->
                         property "image-rendering" "pixelated"
@@ -279,8 +287,7 @@ viewVideo : String -> Html msg
 viewVideo video =
     Html.div
         [ css
-            [ backgroundColor (rgb 0 0 0)
-            , paddingTop (pct (9 / 16 * 100))
+            [ paddingTop (pct (9 / 16 * 100))
             , position relative
             , overflow hidden
             , borderRadius (px 3)

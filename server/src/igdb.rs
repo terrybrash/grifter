@@ -1,12 +1,14 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
-use surf::post;
+use surf::{get, post};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Cover {
+pub struct Image {
     pub id: u64,
     pub image_id: String,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -71,12 +73,6 @@ pub struct MultiplayerMode {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Screenshot {
-    pub id: u64,
-    pub image_id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Video {
     pub id: u64,
     pub video_id: String,
@@ -97,7 +93,7 @@ pub struct Game {
     pub alternative_names: Vec<AlternativeName>,
     pub updated_at: u64,
     pub summary: Option<String>,
-    pub cover: Option<Cover>,
+    pub cover: Option<Image>,
     #[serde(default)]
     pub game_modes: Vec<u64>,
     #[serde(default)]
@@ -110,8 +106,10 @@ pub struct Game {
     pub multiplayer_modes: Vec<MultiplayerMode>,
     #[serde(default)]
     pub websites: Vec<Website>,
-    pub screenshots: Option<Vec<Screenshot>>,
-    pub videos: Option<Vec<Video>>,
+    #[serde(default)]
+    pub screenshots: Vec<Image>,
+    #[serde(default)]
+    pub videos: Vec<Video>,
 }
 
 #[derive(Debug)]
@@ -147,9 +145,9 @@ where
             "slug",
             "name",
             "updated_at",
-            "cover.image_id",
+            "cover.*",
             "videos.video_id",
-            "screenshots.image_id",
+            "screenshots.*",
             "summary",
             "multiplayer_modes.*",
             "game_modes",
@@ -221,6 +219,31 @@ pub async fn get_themes(
 
     *last_request = Instant::now();
     handle_response(&mut response).await
+}
+
+pub enum ImageData {
+    Jpeg(Vec<u8>),
+    Png(Vec<u8>),
+    Unsupported(String),
+    Unknown,
+}
+
+pub async fn get_image(id: &str) -> Result<ImageData, Error> {
+    let url = format!(
+        "https://images.igdb.com/igdb/image/upload/t_original/{}.xxx",
+        id
+    );
+    let mut response = get(url).send().await.unwrap();
+    let content_type = response
+        .header("content-type")
+        .and_then(|values| values.get(0))
+        .map(|value| value.as_str());
+    match content_type {
+        Some("image/jpeg") => Ok(ImageData::Jpeg(response.body_bytes().await.unwrap())),
+        Some("image/png") => Ok(ImageData::Png(response.body_bytes().await.unwrap())),
+        Some(format) => Ok(ImageData::Unsupported(format.to_owned())),
+        None => Ok(ImageData::Unknown),
+    }
 }
 
 async fn sleep_for_cooldown(last_request: &Instant) {

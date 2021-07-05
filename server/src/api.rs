@@ -2,10 +2,14 @@ use crate::config::Config;
 use crate::game::Game;
 use crate::igdb;
 use crate::twitch;
+use async_std::fs::{self, File};
+use async_std::io;
+use async_std::path::{Path, PathBuf};
+use async_std::prelude::*;
 use flate2::write::GzEncoder;
 use http_types::mime;
-use serde::Serialize;
-use std::io;
+use image::{imageops::FilterType, GenericImageView, ImageFormat, ImageOutputFormat};
+use serde::{Deserialize, Serialize};
 use std::io::Write;
 use tide::{Body, Request, Response};
 
@@ -77,12 +81,17 @@ pub async fn start(
         }
     };
 
+    let address = "http://0.0.0.0:8000";
+    println!("{}", address);
+
     // Start the server
     let mut server = tide::with_state(model);
     server.at("/api/catalog").get(catalog);
     server.at("/api/download/:slug").get(download);
+    server.at("/api/image/:id").get(image);
     server.at("/favicon.ico").get(favicon);
     server.at("/*").get(index);
+    server.at("/").get(index);
     server.listen("0.0.0.0:8000").await
 }
 
@@ -134,4 +143,157 @@ async fn catalog(r: Request<Model>) -> tide::Result<Response> {
         .content_type(mime::JSON)
         .build();
     Ok(response)
+}
+
+async fn image(r: Request<Model>) -> tide::Result<Response> {
+    // let size = r.param("size")?;
+    let image_id = r.param("id")?;
+
+    let cache_root = Path::new("./cache");
+    if let Err(e) = fs::create_dir(cache_root).await {
+        match e.kind() {
+            io::ErrorKind::AlreadyExists => { /* this is fine */ }
+            _ => {
+                let err = tide::Error::from_str(500, "failed to create cache directory");
+                return Err(err);
+            }
+        }
+    }
+
+    let image_dir = cache_root.join(image_id);
+    if let Err(e) = fs::create_dir(&image_dir).await {
+        match e.kind() {
+            io::ErrorKind::AlreadyExists => { /* this is fine */ }
+            _ => {
+                let err = tide::Error::from_str(500, "failed to create cache directory");
+                return Err(err);
+            }
+        }
+    }
+
+    #[derive(Deserialize)]
+    struct Query {
+        w: Option<u32>,
+        h: Option<u32>,
+    }
+    let query: Query = r.query()?;
+
+    let scaled_image_name = match (query.w, query.h) {
+        (Some(width), Some(height)) => Some(format!("{}x{}", width, height)),
+        (Some(width), None) => Some(format!("{}x_", width)),
+        (None, Some(height)) => Some(format!("_x{}", height)),
+        (None, None) => None,
+    };
+
+    let image = match scaled_image_name {
+        None => {
+            let original_image_path = image_dir.join("original.jpeg");
+            match fs::read(&original_image_path).await {
+                Ok(original_image) => original_image,
+                Err(_) => {
+                    let original_image = match igdb::get_image(&image_id).await {
+                        Ok(igdb::ImageData::Jpeg(jpeg)) => jpeg,
+                        Ok(igdb::ImageData::Png(png)) => {
+                            let img = image::load_from_memory_with_format(&png, ImageFormat::Png)?;
+                            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+                            img.write_to(&mut jpeg, ImageFormat::Jpeg)?;
+                            jpeg
+                        }
+                        Ok(igdb::ImageData::Unsupported(format)) => {
+                            println!("IGDB gave me an image in a file format I don't support ({}). Report this.", format);
+                            return Err(tide::Error::from_str(500, "unsupported image format"));
+                        }
+                        Ok(igdb::ImageData::Unknown) => {
+                            println!("IGDB gave me an image without a file format.");
+                            return Err(tide::Error::from_str(500, "no image format"));
+                        }
+                        Err(_) => panic!(),
+                    };
+                    let mut file = File::create(&original_image_path).await?;
+                    file.write_all(original_image.as_ref()).await?;
+                    original_image
+                }
+            }
+        }
+        Some(scaled_image_name) => {
+            let scaled_image_path = image_dir.join(format!("{}.jpeg", scaled_image_name));
+            match fs::read(&scaled_image_path).await {
+                Ok(scaled_image) => scaled_image,
+                Err(_) => {
+                    let original_image_path = image_dir.join("original.jpeg");
+                    let original_image = match fs::read(&original_image_path).await {
+                        Ok(original_image) => original_image,
+                        Err(_) => {
+                            let original_image = match igdb::get_image(&image_id).await {
+                                Ok(igdb::ImageData::Jpeg(jpeg)) => jpeg,
+                                Ok(igdb::ImageData::Png(png)) => {
+                                    let img = image::load_from_memory_with_format(
+                                        &png,
+                                        ImageFormat::Png,
+                                    )?;
+                                    let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+                                    img.write_to(&mut jpeg, ImageFormat::Jpeg)?;
+                                    jpeg
+                                }
+                                Ok(igdb::ImageData::Unsupported(format)) => {
+                                    println!("IGDB gave me an image in a file format I don't support ({}). Report this.", format);
+                                    return Err(tide::Error::from_str(
+                                        500,
+                                        "unsupported image format",
+                                    ));
+                                }
+                                Ok(igdb::ImageData::Unknown) => {
+                                    println!("IGDB gave me an image without a file format.");
+                                    return Err(tide::Error::from_str(500, "no image format"));
+                                }
+                                Err(_) => panic!(),
+                            };
+                            let mut file = File::create(&original_image_path).await?;
+                            file.write_all(original_image.as_ref()).await?;
+                            original_image
+                        }
+                    };
+
+                    let scaled_image =
+                        match resize_image(query.w, query.h, ImageFormat::Jpeg, &original_image) {
+                            Ok(image) => image,
+                            Err(e) => {
+                                println!("resizing failed: {:?}", e);
+                                return Err(tide::Error::from_str(404, "test"));
+                            }
+                        };
+                    let mut file = File::create(&scaled_image_path).await?;
+                    file.write_all(scaled_image.as_ref()).await?;
+                    scaled_image
+                }
+            }
+        }
+    };
+
+    let response = Response::builder(200)
+        .body(image)
+        .header("cache-control", "max-age=31536000, immutable")
+        .content_type(mime::JPEG)
+        .build();
+    Ok(response)
+}
+
+fn resize_image<T: AsRef<[u8]>>(
+    max_width: Option<u32>,
+    max_height: Option<u32>,
+    image_format: ImageFormat,
+    jpeg_bytes: T,
+) -> image::error::ImageResult<Vec<u8>> {
+    let original_image = image::load_from_memory_with_format(jpeg_bytes.as_ref(), image_format)?;
+    let (mut width, mut height) = original_image.dimensions();
+    if let Some(max_width) = max_width {
+        width = u32::min(width, max_width);
+    }
+    if let Some(max_height) = max_height {
+        height = u32::min(height, max_height);
+    }
+    let scaled_image = original_image.thumbnail(width, height);
+    let mut jpeg_bytes_scaled: Vec<u8> = Vec::new();
+    scaled_image.write_to(&mut jpeg_bytes_scaled, image_format)?;
+    Ok(jpeg_bytes_scaled)
 }
