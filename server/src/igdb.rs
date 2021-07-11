@@ -224,6 +224,8 @@ pub async fn get_themes(
 pub enum ImageData {
     Jpeg(Vec<u8>),
     Png(Vec<u8>),
+    Webp(Vec<u8>),
+    Gif(Vec<u8>),
     Unsupported(String),
     Unknown,
 }
@@ -241,6 +243,8 @@ pub async fn get_image(id: &str) -> Result<ImageData, Error> {
     match content_type {
         Some("image/jpeg") => Ok(ImageData::Jpeg(response.body_bytes().await.unwrap())),
         Some("image/png") => Ok(ImageData::Png(response.body_bytes().await.unwrap())),
+        Some("image/gif") => Ok(ImageData::Gif(response.body_bytes().await.unwrap())),
+        Some("image/webp") => Ok(ImageData::Webp(response.body_bytes().await.unwrap())),
         Some(format) => Ok(ImageData::Unsupported(format.to_owned())),
         None => Ok(ImageData::Unknown),
     }

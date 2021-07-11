@@ -146,7 +146,6 @@ async fn catalog(r: Request<Model>) -> tide::Result<Response> {
 }
 
 async fn image(r: Request<Model>) -> tide::Result<Response> {
-    // let size = r.param("size")?;
     let image_id = r.param("id")?;
 
     let cache_root = Path::new("./cache");
@@ -191,24 +190,7 @@ async fn image(r: Request<Model>) -> tide::Result<Response> {
             match fs::read(&original_image_path).await {
                 Ok(original_image) => original_image,
                 Err(_) => {
-                    let original_image = match igdb::get_image(&image_id).await {
-                        Ok(igdb::ImageData::Jpeg(jpeg)) => jpeg,
-                        Ok(igdb::ImageData::Png(png)) => {
-                            let img = image::load_from_memory_with_format(&png, ImageFormat::Png)?;
-                            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-                            img.write_to(&mut jpeg, ImageFormat::Jpeg)?;
-                            jpeg
-                        }
-                        Ok(igdb::ImageData::Unsupported(format)) => {
-                            println!("IGDB gave me an image in a file format I don't support ({}). Report this.", format);
-                            return Err(tide::Error::from_str(500, "unsupported image format"));
-                        }
-                        Ok(igdb::ImageData::Unknown) => {
-                            println!("IGDB gave me an image without a file format.");
-                            return Err(tide::Error::from_str(500, "no image format"));
-                        }
-                        Err(_) => panic!(),
-                    };
+                    let original_image = get_jpeg_from_igdb(&image_id).await?;
                     let mut file = File::create(&original_image_path).await?;
                     file.write_all(original_image.as_ref()).await?;
                     original_image
@@ -224,30 +206,7 @@ async fn image(r: Request<Model>) -> tide::Result<Response> {
                     let original_image = match fs::read(&original_image_path).await {
                         Ok(original_image) => original_image,
                         Err(_) => {
-                            let original_image = match igdb::get_image(&image_id).await {
-                                Ok(igdb::ImageData::Jpeg(jpeg)) => jpeg,
-                                Ok(igdb::ImageData::Png(png)) => {
-                                    let img = image::load_from_memory_with_format(
-                                        &png,
-                                        ImageFormat::Png,
-                                    )?;
-                                    let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-                                    img.write_to(&mut jpeg, ImageFormat::Jpeg)?;
-                                    jpeg
-                                }
-                                Ok(igdb::ImageData::Unsupported(format)) => {
-                                    println!("IGDB gave me an image in a file format I don't support ({}). Report this.", format);
-                                    return Err(tide::Error::from_str(
-                                        500,
-                                        "unsupported image format",
-                                    ));
-                                }
-                                Ok(igdb::ImageData::Unknown) => {
-                                    println!("IGDB gave me an image without a file format.");
-                                    return Err(tide::Error::from_str(500, "no image format"));
-                                }
-                                Err(_) => panic!(),
-                            };
+                            let original_image = get_jpeg_from_igdb(&image_id).await?;
                             let mut file = File::create(&original_image_path).await?;
                             file.write_all(original_image.as_ref()).await?;
                             original_image
@@ -276,6 +235,42 @@ async fn image(r: Request<Model>) -> tide::Result<Response> {
         .content_type(mime::JPEG)
         .build();
     Ok(response)
+}
+
+async fn get_jpeg_from_igdb(image_id: &str) -> tide::Result<Vec<u8>> {
+    match igdb::get_image(&image_id).await {
+        Ok(igdb::ImageData::Jpeg(jpeg)) => Ok(jpeg),
+        Ok(igdb::ImageData::Png(png)) => {
+            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+            image::load_from_memory_with_format(&png, ImageFormat::Png)?
+                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
+            Ok(jpeg)
+        }
+        Ok(igdb::ImageData::Webp(webp)) => {
+            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+            image::load_from_memory_with_format(&webp, ImageFormat::WebP)?
+                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
+            Ok(jpeg)
+        }
+        Ok(igdb::ImageData::Gif(gif)) => {
+            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+            image::load_from_memory_with_format(&gif, ImageFormat::Gif)?
+                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
+            Ok(jpeg)
+        }
+        Ok(igdb::ImageData::Unsupported(format)) => {
+            println!(
+                "IGDB gave me an image in a file format I don't support ({}). Report this.",
+                format
+            );
+            return Err(tide::Error::from_str(500, "unsupported image format"));
+        }
+        Ok(igdb::ImageData::Unknown) => {
+            println!("IGDB gave me an image without a file format.");
+            return Err(tide::Error::from_str(500, "no image format"));
+        }
+        Err(_) => panic!(),
+    }
 }
 
 fn resize_image<T: AsRef<[u8]>>(
