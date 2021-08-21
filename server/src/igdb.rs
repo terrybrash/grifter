@@ -1,3 +1,4 @@
+use image::{imageops::FilterType, GenericImageView, ImageFormat, ImageOutputFormat};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
@@ -63,10 +64,10 @@ pub struct MultiplayerMode {
     pub game: u64,
     pub lancoop: bool,
     pub offlinecoop: bool,
-    pub offlinecoopmax: Option<u32>, // exists if offlinecoop is true
+    pub offlinecoopmax: Option<u32>, // maybe there's a known max number of _offline_ coop players
     pub offlinemax: Option<u32>,
     pub onlinecoop: bool,
-    pub onlinecoopmax: Option<u32>, // exists if onlinecoop is true
+    pub onlinecoopmax: Option<u32>, // maybe there's a known max number of _online_ coop players
     pub onlinemax: Option<u32>,
     pub platform: Option<u64>,
     pub splitscreen: bool,
@@ -238,8 +239,8 @@ pub async fn get_image(id: &str) -> Result<ImageData, Error> {
     let mut response = get(url).send().await.unwrap();
     let content_type = response
         .header("content-type")
-        .and_then(|values| values.get(0))
-        .map(|value| value.as_str());
+        .and_then(|content_types| content_types.get(0))
+        .map(|content_type| content_type.as_str());
     match content_type {
         Some("image/jpeg") => Ok(ImageData::Jpeg(response.body_bytes().await.unwrap())),
         Some("image/png") => Ok(ImageData::Png(response.body_bytes().await.unwrap())),
@@ -247,6 +248,42 @@ pub async fn get_image(id: &str) -> Result<ImageData, Error> {
         Some("image/webp") => Ok(ImageData::Webp(response.body_bytes().await.unwrap())),
         Some(format) => Ok(ImageData::Unsupported(format.to_owned())),
         None => Ok(ImageData::Unknown),
+    }
+}
+
+pub async fn get_jpeg(image_id: &str) -> Result<Vec<u8>, image::ImageError> {
+    match get_image(&image_id).await {
+        Ok(ImageData::Jpeg(jpeg)) => Ok(jpeg),
+        Ok(ImageData::Png(png)) => {
+            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+            image::load_from_memory_with_format(&png, ImageFormat::Png)?
+                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
+            Ok(jpeg)
+        }
+        Ok(ImageData::Webp(webp)) => {
+            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+            image::load_from_memory_with_format(&webp, ImageFormat::WebP)?
+                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
+            Ok(jpeg)
+        }
+        Ok(ImageData::Gif(gif)) => {
+            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+            image::load_from_memory_with_format(&gif, ImageFormat::Gif)?
+                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
+            Ok(jpeg)
+        }
+        Ok(ImageData::Unsupported(format)) => {
+            println!(
+                "IGDB gave me an image in a file format I don't support ({}). Report this.",
+                format
+            );
+            panic!();
+        }
+        Ok(ImageData::Unknown) => {
+            println!("IGDB gave me an image without a file format.");
+            panic!();
+        }
+        Err(_) => panic!(),
     }
 }
 

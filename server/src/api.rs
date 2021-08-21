@@ -148,87 +148,13 @@ async fn catalog(r: Request<Model>) -> tide::Result<Response> {
 async fn image(r: Request<Model>) -> tide::Result<Response> {
     let image_id = r.param("id")?;
 
-    let cache_root = Path::new("./cache");
-    if let Err(e) = fs::create_dir(cache_root).await {
-        match e.kind() {
-            io::ErrorKind::AlreadyExists => { /* this is fine */ }
-            _ => {
-                let err = tide::Error::from_str(500, "failed to create cache directory");
-                return Err(err);
-            }
-        }
-    }
-
-    let image_dir = cache_root.join(image_id);
-    if let Err(e) = fs::create_dir(&image_dir).await {
-        match e.kind() {
-            io::ErrorKind::AlreadyExists => { /* this is fine */ }
-            _ => {
-                let err = tide::Error::from_str(500, "failed to create cache directory");
-                return Err(err);
-            }
-        }
-    }
-
     #[derive(Deserialize)]
-    struct Query {
+    struct MaxDimensions {
         w: Option<u32>,
         h: Option<u32>,
     }
-    let query: Query = r.query()?;
-
-    let scaled_image_name = match (query.w, query.h) {
-        (Some(width), Some(height)) => Some(format!("{}x{}", width, height)),
-        (Some(width), None) => Some(format!("{}x_", width)),
-        (None, Some(height)) => Some(format!("_x{}", height)),
-        (None, None) => None,
-    };
-
-    let image = match scaled_image_name {
-        None => {
-            let original_image_path = image_dir.join("original.jpeg");
-            match fs::read(&original_image_path).await {
-                Ok(original_image) => original_image,
-                Err(_) => {
-                    let original_image = get_jpeg_from_igdb(&image_id).await?;
-                    let mut file = File::create(&original_image_path).await?;
-                    file.write_all(original_image.as_ref()).await?;
-                    original_image
-                }
-            }
-        }
-        Some(scaled_image_name) => {
-            let scaled_image_path = image_dir.join(format!("{}.jpeg", scaled_image_name));
-            match fs::read(&scaled_image_path).await {
-                Ok(scaled_image) => scaled_image,
-                Err(_) => {
-                    let original_image_path = image_dir.join("original.jpeg");
-                    let original_image = match fs::read(&original_image_path).await {
-                        Ok(original_image) => original_image,
-                        Err(_) => {
-                            let original_image = get_jpeg_from_igdb(&image_id).await?;
-                            let mut file = File::create(&original_image_path).await?;
-                            file.write_all(original_image.as_ref()).await?;
-                            original_image
-                        }
-                    };
-
-                    let scaled_image =
-                        match resize_image(query.w, query.h, ImageFormat::Jpeg, &original_image) {
-                            Ok(image) => image,
-                            Err(e) => {
-                                println!("resizing failed: {:?}", e);
-                                return Err(tide::Error::from_str(404, "test"));
-                            }
-                        };
-                    let mut file = File::create(&scaled_image_path).await?;
-                    file.write_all(scaled_image.as_ref()).await?;
-                    scaled_image
-                }
-            }
-        }
-    };
-
+    let dimensions: MaxDimensions = r.query()?;
+    let image = get_jpeg_from_cache_or_igdb(image_id, dimensions.w, dimensions.h).await?;
     let response = Response::builder(200)
         .body(image)
         .header("cache-control", "max-age=31536000, immutable")
@@ -237,39 +163,78 @@ async fn image(r: Request<Model>) -> tide::Result<Response> {
     Ok(response)
 }
 
-async fn get_jpeg_from_igdb(image_id: &str) -> tide::Result<Vec<u8>> {
-    match igdb::get_image(&image_id).await {
-        Ok(igdb::ImageData::Jpeg(jpeg)) => Ok(jpeg),
-        Ok(igdb::ImageData::Png(png)) => {
-            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-            image::load_from_memory_with_format(&png, ImageFormat::Png)?
-                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
-            Ok(jpeg)
+pub async fn get_jpeg_from_cache_or_igdb(
+    image_id: &str,
+    max_width: Option<u32>,
+    max_height: Option<u32>,
+) -> Result<Vec<u8>, async_std::io::Error> {
+    let cache_root = Path::new("./cache");
+    if let Err(e) = fs::create_dir(cache_root).await {
+        match e.kind() {
+            io::ErrorKind::AlreadyExists => { /* this is fine */ }
+            _ => panic!("failed to create cache directory"),
         }
-        Ok(igdb::ImageData::Webp(webp)) => {
-            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-            image::load_from_memory_with_format(&webp, ImageFormat::WebP)?
-                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
-            Ok(jpeg)
+    }
+
+    let image_dir = cache_root.join(image_id);
+    if let Err(e) = fs::create_dir(&image_dir).await {
+        match e.kind() {
+            io::ErrorKind::AlreadyExists => { /* this is fine */ }
+            _ => panic!("failed to create cache directory"),
         }
-        Ok(igdb::ImageData::Gif(gif)) => {
-            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-            image::load_from_memory_with_format(&gif, ImageFormat::Gif)?
-                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
-            Ok(jpeg)
+    }
+
+    let scaled_image_name = match (max_width, max_height) {
+        (Some(width), Some(height)) => Some(format!("{}x{}", width, height)),
+        (Some(width), None) => Some(format!("{}x_", width)),
+        (None, Some(height)) => Some(format!("_x{}", height)),
+        (None, None) => None,
+    };
+
+    match scaled_image_name {
+        None => {
+            let original_image_path = image_dir.join("original.jpeg");
+            match fs::read(&original_image_path).await {
+                Ok(original_image) => Ok(original_image),
+                Err(_) => {
+                    let original_image = igdb::get_jpeg(&image_id).await.unwrap();
+                    let mut file = File::create(&original_image_path).await?;
+                    file.write_all(original_image.as_ref()).await?;
+                    Ok(original_image)
+                }
+            }
         }
-        Ok(igdb::ImageData::Unsupported(format)) => {
-            println!(
-                "IGDB gave me an image in a file format I don't support ({}). Report this.",
-                format
-            );
-            return Err(tide::Error::from_str(500, "unsupported image format"));
+        Some(scaled_image_name) => {
+            let scaled_image_path = image_dir.join(format!("{}.jpeg", scaled_image_name));
+            match fs::read(&scaled_image_path).await {
+                Ok(scaled_image) => Ok(scaled_image),
+                Err(_) => {
+                    let original_image_path = image_dir.join("original.jpeg");
+                    let original_image = match fs::read(&original_image_path).await {
+                        Ok(original_image) => original_image,
+                        Err(_) => {
+                            let original_image = igdb::get_jpeg(&image_id).await.unwrap();
+                            let mut file = File::create(&original_image_path).await?;
+                            file.write_all(original_image.as_ref()).await?;
+                            original_image
+                        }
+                    };
+
+                    let scaled_image = match resize_image(
+                        max_width,
+                        max_height,
+                        ImageFormat::Jpeg,
+                        &original_image,
+                    ) {
+                        Ok(image) => image,
+                        Err(e) => panic!("resizing failed: {:?}", e),
+                    };
+                    let mut file = File::create(&scaled_image_path).await?;
+                    file.write_all(scaled_image.as_ref()).await?;
+                    Ok(scaled_image)
+                }
+            }
         }
-        Ok(igdb::ImageData::Unknown) => {
-            println!("IGDB gave me an image without a file format.");
-            return Err(tide::Error::from_str(500, "no image format"));
-        }
-        Err(_) => panic!(),
     }
 }
 
