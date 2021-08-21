@@ -1,9 +1,0 @@
-[development]
-address = "0.0.0.0"
-port = 9090
-keep_alive = 5
-
-[production]
-address = "0.0.0.0"
-port = 9090
-keep_alive = 5
