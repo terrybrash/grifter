@@ -227,7 +227,7 @@ pub async fn get_jpeg_from_cache_or_igdb(
                         &original_image,
                     ) {
                         Ok(image) => image,
-                        Err(e) => panic!("resizing failed: {:?}", e),
+                        Err(e) => panic!("resizing failed: {:?}", e), // FIXME: Unexpected EOF, failed to fill whole buffer
                     };
                     let mut file = File::create(&scaled_image_path).await?;
                     file.write_all(scaled_image.as_ref()).await?;
