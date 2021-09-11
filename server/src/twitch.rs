@@ -8,15 +8,15 @@ pub struct Authentication {
     pub token_type: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct AuthenticationError {
-    message: String,
-}
-
 #[derive(Debug)]
 pub enum Error {
     ClientError(u16, String),
     Other(u16),
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AuthenticationError {
+    message: String,
 }
 
 pub fn authenticate(client_id: &str, client_secret: &str) -> Result<Authentication, Error> {

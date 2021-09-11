@@ -119,8 +119,8 @@ pub enum Error {
 }
 
 const IGDB_ENDPOINT: &str = "https://api.igdb.com/v4";
-const IGDB_QUERY_LIMIT: usize = 500; // https://api-docs.igdb.com/#pagination
-const IGDB_REQUEST_COOLDOWN: u64 = 250; // https://api-docs.igdb.com/#rate-limits
+const IGDB_QUERY_LIMIT: usize = 500; // Explained at https://api-docs.igdb.com/#pagination
+const IGDB_REQUEST_COOLDOWN: u64 = 250; // Explained at https://api-docs.igdb.com/#rate-limits
 
 pub async fn get_games<T>(
     client_id: &str,
@@ -222,71 +222,6 @@ pub async fn get_themes(
     handle_response(&mut response).await
 }
 
-pub enum ImageData {
-    Jpeg(Vec<u8>),
-    Png(Vec<u8>),
-    Webp(Vec<u8>),
-    Gif(Vec<u8>),
-    Unsupported(String),
-    Unknown,
-}
-
-pub async fn get_image(id: &str) -> Result<ImageData, Error> {
-    let url = format!(
-        "https://images.igdb.com/igdb/image/upload/t_original/{}.xxx",
-        id
-    );
-    let mut response = get(url).send().await.unwrap();
-    let content_type = response
-        .header("content-type")
-        .and_then(|content_types| content_types.get(0))
-        .map(|content_type| content_type.as_str());
-    match content_type {
-        Some("image/jpeg") => Ok(ImageData::Jpeg(response.body_bytes().await.unwrap())),
-        Some("image/png") => Ok(ImageData::Png(response.body_bytes().await.unwrap())),
-        Some("image/gif") => Ok(ImageData::Gif(response.body_bytes().await.unwrap())),
-        Some("image/webp") => Ok(ImageData::Webp(response.body_bytes().await.unwrap())),
-        Some(format) => Ok(ImageData::Unsupported(format.to_owned())),
-        None => Ok(ImageData::Unknown),
-    }
-}
-
-pub async fn get_jpeg(image_id: &str) -> Result<Vec<u8>, image::ImageError> {
-    match get_image(&image_id).await {
-        Ok(ImageData::Jpeg(jpeg)) => Ok(jpeg),
-        Ok(ImageData::Png(png)) => {
-            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-            image::load_from_memory_with_format(&png, ImageFormat::Png)?
-                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
-            Ok(jpeg)
-        }
-        Ok(ImageData::Webp(webp)) => {
-            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-            image::load_from_memory_with_format(&webp, ImageFormat::WebP)?
-                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
-            Ok(jpeg)
-        }
-        Ok(ImageData::Gif(gif)) => {
-            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-            image::load_from_memory_with_format(&gif, ImageFormat::Gif)?
-                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
-            Ok(jpeg)
-        }
-        Ok(ImageData::Unsupported(format)) => {
-            println!(
-                "IGDB gave me an image in a file format I don't support ({}). Report this.",
-                format
-            );
-            panic!();
-        }
-        Ok(ImageData::Unknown) => {
-            println!("IGDB gave me an image without a file format.");
-            panic!();
-        }
-        Err(_) => panic!(),
-    }
-}
-
 async fn sleep_for_cooldown(last_request: &Instant) {
     let cooldown = Duration::from_millis(IGDB_REQUEST_COOLDOWN);
     let elapsed = last_request.elapsed();
@@ -340,5 +275,70 @@ where
                 panic!()
             }
         }
+    }
+}
+
+pub async fn get_jpeg(image_id: &str) -> Result<Vec<u8>, image::ImageError> {
+    match get_image(&image_id).await {
+        Ok(ImageData::Jpeg(jpeg)) => Ok(jpeg),
+        Ok(ImageData::Png(png)) => {
+            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+            image::load_from_memory_with_format(&png, ImageFormat::Png)?
+                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
+            Ok(jpeg)
+        }
+        Ok(ImageData::Webp(webp)) => {
+            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+            image::load_from_memory_with_format(&webp, ImageFormat::WebP)?
+                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
+            Ok(jpeg)
+        }
+        Ok(ImageData::Gif(gif)) => {
+            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+            image::load_from_memory_with_format(&gif, ImageFormat::Gif)?
+                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
+            Ok(jpeg)
+        }
+        Ok(ImageData::Unsupported(format)) => {
+            println!(
+                "IGDB gave me an image in a file format I don't support ({}). Report this.",
+                format
+            );
+            panic!();
+        }
+        Ok(ImageData::Unknown) => {
+            println!("IGDB gave me an image without a file format.");
+            panic!();
+        }
+        Err(_) => panic!(),
+    }
+}
+
+pub enum ImageData {
+    Jpeg(Vec<u8>),
+    Png(Vec<u8>),
+    Webp(Vec<u8>),
+    Gif(Vec<u8>),
+    Unsupported(String),
+    Unknown,
+}
+
+pub async fn get_image(id: &str) -> Result<ImageData, Error> {
+    let url = format!(
+        "https://images.igdb.com/igdb/image/upload/t_original/{}.xxx",
+        id
+    );
+    let mut response = get(url).send().await.unwrap();
+    let content_type = response
+        .header("content-type")
+        .and_then(|content_types| content_types.get(0))
+        .map(|content_type| content_type.as_str());
+    match content_type {
+        Some("image/jpeg") => Ok(ImageData::Jpeg(response.body_bytes().await.unwrap())),
+        Some("image/png") => Ok(ImageData::Png(response.body_bytes().await.unwrap())),
+        Some("image/gif") => Ok(ImageData::Gif(response.body_bytes().await.unwrap())),
+        Some("image/webp") => Ok(ImageData::Webp(response.body_bytes().await.unwrap())),
+        Some(format) => Ok(ImageData::Unsupported(format.to_owned())),
+        None => Ok(ImageData::Unknown),
     }
 }
