@@ -13,9 +13,9 @@ thiserror = "^1.0"
 unicode-normalization = '0.1.13'
 surf = "2.2.0"
 tide = "0.16.0"
-async-std = { version="1.9.0", features=["attributes"] }
-serde = { version="1.0", features=["derive"] }
-ureq = { version="1.5.1", features=["json"] }
+async-std = { version = "1.9.0", features = ["attributes"] }
+serde = { version = "1.0", features = ["derive"] }
+ureq = { version = "1.5.1", features = ["json"] }
 futures = "0.3.15"
 http-types = "2.11.1"
 image = "0.23.14"
