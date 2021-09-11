@@ -2,13 +2,14 @@ use crate::config::Config;
 use crate::game::Game;
 use crate::igdb;
 use crate::twitch;
+use async_recursion::async_recursion;
 use async_std::fs::{self, File};
 use async_std::io;
 use async_std::path::{Path, PathBuf};
 use async_std::prelude::*;
 use flate2::write::GzEncoder;
 use http_types::mime;
-use image::{imageops::FilterType, GenericImageView, ImageFormat, ImageOutputFormat};
+use image::{GenericImageView, ImageFormat};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use tide::{Body, Request, Response};
@@ -145,16 +146,21 @@ async fn catalog(r: Request<Model>) -> tide::Result<Response> {
     Ok(response)
 }
 
+#[derive(Deserialize)]
+enum ImageSize {
+    Thumbnail,
+    Original,
+}
+
 async fn image(r: Request<Model>) -> tide::Result<Response> {
     let image_id = r.param("id")?;
 
     #[derive(Deserialize)]
-    struct MaxDimensions {
-        w: Option<u32>,
-        h: Option<u32>,
+    struct Params {
+        size: ImageSize,
     }
-    let dimensions: MaxDimensions = r.query()?;
-    let image = get_jpeg_from_cache_or_igdb(image_id, dimensions.w, dimensions.h).await?;
+    let query: Params = r.query()?;
+    let image = get_jpeg_from_cache_or_igdb(image_id, query.size).await?;
     let response = Response::builder(200)
         .body(image)
         .header("cache-control", "max-age=31536000, immutable")
@@ -163,11 +169,7 @@ async fn image(r: Request<Model>) -> tide::Result<Response> {
     Ok(response)
 }
 
-pub async fn get_jpeg_from_cache_or_igdb(
-    image_id: &str,
-    max_width: Option<u32>,
-    max_height: Option<u32>,
-) -> Result<Vec<u8>, async_std::io::Error> {
+async fn image_cache(image_id: &str) -> PathBuf {
     let cache_root = Path::new("./cache");
     if let Err(e) = fs::create_dir(cache_root).await {
         match e.kind() {
@@ -175,7 +177,6 @@ pub async fn get_jpeg_from_cache_or_igdb(
             _ => panic!("failed to create cache directory"),
         }
     }
-
     let image_dir = cache_root.join(image_id);
     if let Err(e) = fs::create_dir(&image_dir).await {
         match e.kind() {
@@ -184,51 +185,41 @@ pub async fn get_jpeg_from_cache_or_igdb(
         }
     }
 
-    let scaled_image_name = match (max_width, max_height) {
-        (Some(width), Some(height)) => Some(format!("{}x{}", width, height)),
-        (Some(width), None) => Some(format!("{}x_", width)),
-        (None, Some(height)) => Some(format!("_x{}", height)),
-        (None, None) => None,
-    };
+    image_dir
+}
 
-    match scaled_image_name {
-        None => {
+#[async_recursion]
+async fn get_jpeg_from_cache_or_igdb(
+    image_id: &str,
+    size: ImageSize,
+) -> Result<Vec<u8>, async_std::io::Error> {
+    let image_dir = image_cache(image_id).await;
+    match size {
+        ImageSize::Original => {
             let original_image_path = image_dir.join("original.jpeg");
             match fs::read(&original_image_path).await {
                 Ok(original_image) => Ok(original_image),
                 Err(_) => {
-                    let original_image = igdb::get_jpeg(&image_id).await.unwrap();
+                    let original_image = igdb::get_image(image_id).await.unwrap();
+                    let jpeg = original_image.into_jpeg().unwrap();
                     let mut file = File::create(&original_image_path).await?;
-                    file.write_all(original_image.as_ref()).await?;
-                    Ok(original_image)
+                    file.write_all(jpeg.as_ref()).await?;
+                    Ok(jpeg)
                 }
             }
         }
-        Some(scaled_image_name) => {
-            let scaled_image_path = image_dir.join(format!("{}.jpeg", scaled_image_name));
+        ImageSize::Thumbnail => {
+            let scaled_image_path = image_dir.join("thumbnail.jpeg");
             match fs::read(&scaled_image_path).await {
                 Ok(scaled_image) => Ok(scaled_image),
                 Err(_) => {
-                    let original_image_path = image_dir.join("original.jpeg");
-                    let original_image = match fs::read(&original_image_path).await {
-                        Ok(original_image) => original_image,
-                        Err(_) => {
-                            let original_image = igdb::get_jpeg(&image_id).await.unwrap();
-                            let mut file = File::create(&original_image_path).await?;
-                            file.write_all(original_image.as_ref()).await?;
-                            original_image
-                        }
-                    };
-
-                    let scaled_image = match resize_image(
-                        max_width,
-                        max_height,
-                        ImageFormat::Jpeg,
-                        &original_image,
-                    ) {
-                        Ok(image) => image,
-                        Err(e) => panic!("resizing failed: {:?}", e), // FIXME: Unexpected EOF, failed to fill whole buffer
-                    };
+                    let original_image =
+                        get_jpeg_from_cache_or_igdb(image_id, ImageSize::Original).await?;
+                    let scaled_image =
+                        match resize_image(None, Some(400), ImageFormat::Jpeg, &original_image) {
+                            Ok(image) => image,
+                            Err(e) => panic!("resizing failed: {:?}", e), // FIXME: Unexpected EOF, failed to fill whole buffer
+                        };
                     let mut file = File::create(&scaled_image_path).await?;
                     file.write_all(scaled_image.as_ref()).await?;
                     Ok(scaled_image)

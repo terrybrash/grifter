@@ -197,7 +197,7 @@ viewInfo game genres modes stores =
           case game.cover of
             Just cover ->
                 Html.img
-                    [ Attr.src ("/api/image/" ++ cover.id)
+                    [ Attr.src ("/api/image/" ++ cover.id ++ "?size=Original")
                     , Attr.width cover.width
                     , Attr.height cover.height
                     , css [ display block, width (pct 100), height auto, marginBottom (em 1) ]
@@ -264,7 +264,7 @@ viewScreenshot game screenshot =
             ]
         ]
         [ Html.img
-            [ Attr.src ("/api/image/" ++ screenshot.id)
+            [ Attr.src ("/api/image/" ++ screenshot.id ++ "?size=Original")
             , Attr.width screenshot.width
             , Attr.height screenshot.height
             , css

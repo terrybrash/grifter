@@ -1,11 +1,11 @@
-use image::{imageops::FilterType, GenericImageView, ImageFormat, ImageOutputFormat};
+use image::{ImageFormat};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 use surf::{get, post};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Image {
+pub struct ImageDescription {
     pub id: u64,
     pub image_id: String,
     pub width: u32,
@@ -94,7 +94,7 @@ pub struct Game {
     pub alternative_names: Vec<AlternativeName>,
     pub updated_at: u64,
     pub summary: Option<String>,
-    pub cover: Option<Image>,
+    pub cover: Option<ImageDescription>,
     #[serde(default)]
     pub game_modes: Vec<u64>,
     #[serde(default)]
@@ -108,7 +108,7 @@ pub struct Game {
     #[serde(default)]
     pub websites: Vec<Website>,
     #[serde(default)]
-    pub screenshots: Vec<Image>,
+    pub screenshots: Vec<ImageDescription>,
     #[serde(default)]
     pub videos: Vec<Video>,
 }
@@ -278,67 +278,82 @@ where
     }
 }
 
-pub async fn get_jpeg(image_id: &str) -> Result<Vec<u8>, image::ImageError> {
-    match get_image(&image_id).await {
-        Ok(ImageData::Jpeg(jpeg)) => Ok(jpeg),
-        Ok(ImageData::Png(png)) => {
-            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-            image::load_from_memory_with_format(&png, ImageFormat::Png)?
-                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
-            Ok(jpeg)
-        }
-        Ok(ImageData::Webp(webp)) => {
-            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-            image::load_from_memory_with_format(&webp, ImageFormat::WebP)?
-                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
-            Ok(jpeg)
-        }
-        Ok(ImageData::Gif(gif)) => {
-            let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-            image::load_from_memory_with_format(&gif, ImageFormat::Gif)?
-                .write_to(&mut jpeg, ImageFormat::Jpeg)?;
-            Ok(jpeg)
-        }
-        Ok(ImageData::Unsupported(format)) => {
-            println!(
-                "IGDB gave me an image in a file format I don't support ({}). Report this.",
-                format
-            );
-            panic!();
-        }
-        Ok(ImageData::Unknown) => {
-            println!("IGDB gave me an image without a file format.");
-            panic!();
-        }
-        Err(_) => panic!(),
-    }
-}
-
-pub enum ImageData {
+pub enum Image {
     Jpeg(Vec<u8>),
     Png(Vec<u8>),
     Webp(Vec<u8>),
     Gif(Vec<u8>),
-    Unsupported(String),
-    Unknown,
 }
 
-pub async fn get_image(id: &str) -> Result<ImageData, Error> {
+impl Image {
+    pub fn into_jpeg(self) -> Result<Vec<u8>, image::ImageError> {
+        match self {
+            Image::Jpeg(jpeg) => Ok(jpeg),
+            Image::Png(png) => {
+                let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+                image::load_from_memory_with_format(&png, ImageFormat::Png)?
+                    .write_to(&mut jpeg, ImageFormat::Jpeg)?;
+                Ok(jpeg)
+            }
+            Image::Webp(webp) => {
+                let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+                image::load_from_memory_with_format(&webp, ImageFormat::WebP)?
+                    .write_to(&mut jpeg, ImageFormat::Jpeg)?;
+                Ok(jpeg)
+            }
+            Image::Gif(gif) => {
+                let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
+                image::load_from_memory_with_format(&gif, ImageFormat::Gif)?
+                    .write_to(&mut jpeg, ImageFormat::Jpeg)?;
+                Ok(jpeg)
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ImageError {
+    UnsupportedFormat(String),
+    MissingFormat,
+    BadResponse(surf::Error),
+}
+
+pub async fn get_image(id: &str) -> Result<Image, ImageError> {
     let url = format!(
-        "https://images.igdb.com/igdb/image/upload/t_original/{}.xxx",
+        "https://images.igdb.com/igdb/image/upload/t_original/{}.foobar", // IGDB ignores the extension; we can request anything.
         id
     );
-    let mut response = get(url).send().await.unwrap();
+    let mut response = get(url).send().await.map_err(ImageError::BadResponse)?;
     let content_type = response
         .header("content-type")
         .and_then(|content_types| content_types.get(0))
         .map(|content_type| content_type.as_str());
     match content_type {
-        Some("image/jpeg") => Ok(ImageData::Jpeg(response.body_bytes().await.unwrap())),
-        Some("image/png") => Ok(ImageData::Png(response.body_bytes().await.unwrap())),
-        Some("image/gif") => Ok(ImageData::Gif(response.body_bytes().await.unwrap())),
-        Some("image/webp") => Ok(ImageData::Webp(response.body_bytes().await.unwrap())),
-        Some(format) => Ok(ImageData::Unsupported(format.to_owned())),
-        None => Ok(ImageData::Unknown),
+        Some("image/jpeg") => Ok(Image::Jpeg(
+            response
+                .body_bytes()
+                .await
+                .map_err(ImageError::BadResponse)?,
+        )),
+        Some("image/png") => Ok(Image::Png(
+            response
+                .body_bytes()
+                .await
+                .map_err(ImageError::BadResponse)?,
+        )),
+        Some("image/gif") => Ok(Image::Gif(
+            response
+                .body_bytes()
+                .await
+                .map_err(ImageError::BadResponse)?,
+        )),
+        Some("image/webp") => Ok(Image::Webp(
+            response
+                .body_bytes()
+                .await
+                .map_err(ImageError::BadResponse)?,
+        )),
+        Some(format) => Err(ImageError::UnsupportedFormat(format.to_owned())),
+        None => Err(ImageError::MissingFormat),
     }
 }

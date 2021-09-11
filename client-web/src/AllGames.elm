@@ -581,7 +581,7 @@ viewCover game =
     case game.cover of
         Just cover ->
             img
-                [ src ("/api/image/" ++ cover.id ++ "?h=400")
+                [ src ("/api/image/" ++ cover.id ++ "?size=Thumbnail")
                 , Attr.width cover.width
                 , Attr.height cover.height
                 , css [ height (pct 100), width auto ]
@@ -598,7 +598,7 @@ viewScreenshots game =
         |> List.map
             (\image ->
                 img
-                    [ src ("/api/image/" ++ image.id ++ "?h=400")
+                    [ src ("/api/image/" ++ image.id ++ "?size=Thumbnail")
                     , Attr.width image.width
                     , Attr.height image.height
                     , css
