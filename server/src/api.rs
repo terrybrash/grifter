@@ -2,17 +2,13 @@ use crate::config::Config;
 use crate::game::Game;
 use crate::igdb;
 use crate::twitch;
-use async_recursion::async_recursion;
-use async_std::fs::{self, File};
-use async_std::io;
-use async_std::path::{Path, PathBuf};
-use async_std::prelude::*;
 use flate2::write::GzEncoder;
-use http_types::mime;
 use image::{GenericImageView, ImageFormat};
-use serde::{Deserialize, Serialize};
-use std::io::Write;
-use tide::{Body, Request, Response};
+use rouille::{router, Request, Response};
+use serde::Serialize;
+use std::fs::{self, File};
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 
 pub fn gzip(bytes: &[u8]) -> io::Result<Vec<u8>> {
     let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::best());
@@ -34,7 +30,7 @@ struct Catalog {
     themes: Vec<igdb::Theme>,
 }
 
-pub async fn start(
+pub fn start(
     config: &Config,
     last_request: &mut std::time::Instant,
     games: Vec<Game>,
@@ -43,9 +39,8 @@ pub async fn start(
         .unwrap()
         .access_token;
 
-    let mut genres = igdb::get_genres(&config.twitch_client_id, &access_token, last_request)
-        .await
-        .unwrap();
+    let mut genres =
+        igdb::get_genres(&config.twitch_client_id, &access_token, last_request).unwrap();
     for genre in genres.iter_mut() {
         // The names for some of these genres are ugly/verbose. Manually fixing them here.
         match genre.id {
@@ -58,9 +53,8 @@ pub async fn start(
     genres.drain_filter(|genre| !games.iter().any(|game| game.genres.contains(&genre.id)));
     genres.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let mut themes = igdb::get_themes(&config.twitch_client_id, &access_token, last_request)
-        .await
-        .unwrap();
+    let mut themes =
+        igdb::get_themes(&config.twitch_client_id, &access_token, last_request).unwrap();
     themes.drain_filter(|theme| !games.iter().any(|game| game.themes.contains(&theme.id)));
     themes.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -82,103 +76,84 @@ pub async fn start(
         }
     };
 
-    let address = "http://0.0.0.0:8000";
+    let address = "0.0.0.0:8000";
     println!("{}", address);
-
-    // Start the server
-    let mut server = tide::with_state(model);
-    server.at("/api/catalog").get(catalog);
-    server.at("/api/download/:slug").get(download);
-    server.at("/api/image/:id").get(image);
-    server.at("/favicon.ico").get(favicon);
-    server.at("/*").get(index);
-    server.at("/").get(index);
-    server.listen("0.0.0.0:8000").await
+    rouille::start_server(address, move |request| {
+        router!(request,
+            (GET) ["/api/catalog"] => {catalog(&model, request)},
+            (GET) ["/api/download/{slug}", slug: String] => {download(&model, request, &slug)},
+            (GET) ["/api/image/{id}", id: String] => {image(&model, request, &id)},
+            (GET) ["/favicon.ico"] => {favicon()},
+            (GET) ["/"] => {index(&model, request)},
+            _ => index(&model, request),
+        )
+    });
 }
 
-async fn index(r: Request<Model>) -> tide::Result<Response> {
-    let response = Response::builder(200)
-        .body(r.state().index_gz.as_slice())
-        .header("content-encoding", "gzip")
-        .content_type(mime::HTML)
-        .build();
-    Ok(response)
+fn index(model: &Model, _: &Request) -> Response {
+    Response::from_data("text/html", model.index_gz.clone())
+        .with_unique_header("content-encoding", "gzip")
 }
 
-async fn download(r: Request<Model>) -> tide::Result<Response> {
-    let slug = r.param("slug")?;
-    let games = &r.state().catalog.games;
-    let game = match games.iter().find(|game| game.slug == slug) {
+fn download(model: &Model, _: &Request, slug: &str) -> Response {
+    let game = match model.catalog.games.iter().find(|game| game.slug == slug) {
         Some(game) => game,
         None => {
             println!("Download failed: slug doesn't exist {:?}", slug);
-            return Ok(Response::new(404));
+            return Response::empty_404();
         }
     };
 
-    let body = match Body::from_file(&game.path).await {
+    let file = match File::open(&game.path) {
         Ok(file) => file,
         Err(_) => {
             println!("Download failed: file doesn't exist {:?}", game.path);
-            return Ok(Response::new(404));
+            return Response::empty_404();
         }
     };
 
-    let response = Response::builder(200).body(body).build();
-    Ok(response)
+    Response::from_file("application/octet-stream", file)
 }
 
-async fn favicon(_r: Request<Model>) -> tide::Result<Response> {
+fn favicon() -> Response {
     let icon = include_bytes!("../favicon.ico");
-    let response = tide::Response::builder(200)
-        .body(icon.as_ref())
-        .content_type(mime::ICO)
-        .build();
-    Ok(response)
+    Response::from_data("image/x-icon", &icon[..])
 }
 
-async fn catalog(r: Request<Model>) -> tide::Result<Response> {
-    let response = Response::builder(200)
-        .body(r.state().catalog_gz.as_slice())
-        .header("content-encoding", "gzip")
-        .content_type(mime::JSON)
-        .build();
-    Ok(response)
+fn catalog(model: &Model, _: &Request) -> Response {
+    Response::from_data("application/json", model.catalog_gz.clone())
+        .with_unique_header("content-encoding", "gzip")
 }
 
-#[derive(Deserialize)]
 enum ImageSize {
     Thumbnail,
     Original,
 }
 
-async fn image(r: Request<Model>) -> tide::Result<Response> {
-    let image_id = r.param("id")?;
+fn image(_: &Model, request: &Request, image_id: &str) -> Response {
+    let size = match request.get_param("size").as_deref() {
+        Some("Thumbnail") => ImageSize::Thumbnail,
+        Some("Original") => ImageSize::Original,
+        _ => return Response::empty_404(),
+    };
 
-    #[derive(Deserialize)]
-    struct Params {
-        size: ImageSize,
+    // .header("cache-control", "max-age=31536000, immutable")
+    match get_jpeg_from_cache_or_igdb(image_id, size) {
+        Ok(image) => Response::from_data("image/jpeg", image),
+        Err(_) => Response::empty_404(),
     }
-    let query: Params = r.query()?;
-    let image = get_jpeg_from_cache_or_igdb(image_id, query.size).await?;
-    let response = Response::builder(200)
-        .body(image)
-        .header("cache-control", "max-age=31536000, immutable")
-        .content_type(mime::JPEG)
-        .build();
-    Ok(response)
 }
 
-async fn image_cache(image_id: &str) -> PathBuf {
+fn image_cache(image_id: &str) -> PathBuf {
     let cache_root = Path::new("./cache");
-    if let Err(e) = fs::create_dir(cache_root).await {
+    if let Err(e) = fs::create_dir(cache_root) {
         match e.kind() {
             io::ErrorKind::AlreadyExists => { /* this is fine */ }
             _ => panic!("failed to create cache directory"),
         }
     }
     let image_dir = cache_root.join(image_id);
-    if let Err(e) = fs::create_dir(&image_dir).await {
+    if let Err(e) = fs::create_dir(&image_dir) {
         match e.kind() {
             io::ErrorKind::AlreadyExists => { /* this is fine */ }
             _ => panic!("failed to create cache directory"),
@@ -188,40 +163,36 @@ async fn image_cache(image_id: &str) -> PathBuf {
     image_dir
 }
 
-#[async_recursion]
-async fn get_jpeg_from_cache_or_igdb(
-    image_id: &str,
-    size: ImageSize,
-) -> Result<Vec<u8>, async_std::io::Error> {
-    let image_dir = image_cache(image_id).await;
+fn get_jpeg_from_cache_or_igdb(image_id: &str, size: ImageSize) -> Result<Vec<u8>, std::io::Error> {
+    let image_dir = image_cache(image_id);
     match size {
         ImageSize::Original => {
             let original_image_path = image_dir.join("original.jpeg");
-            match fs::read(&original_image_path).await {
+            match fs::read(&original_image_path) {
                 Ok(original_image) => Ok(original_image),
                 Err(_) => {
-                    let original_image = igdb::get_image(image_id).await.unwrap();
+                    let original_image = igdb::get_image(image_id).unwrap();
                     let jpeg = original_image.into_jpeg().unwrap();
-                    let mut file = File::create(&original_image_path).await?;
-                    file.write_all(jpeg.as_ref()).await?;
+                    let mut file = File::create(&original_image_path)?;
+                    file.write_all(jpeg.as_ref())?;
                     Ok(jpeg)
                 }
             }
         }
         ImageSize::Thumbnail => {
             let scaled_image_path = image_dir.join("thumbnail.jpeg");
-            match fs::read(&scaled_image_path).await {
+            match fs::read(&scaled_image_path) {
                 Ok(scaled_image) => Ok(scaled_image),
                 Err(_) => {
                     let original_image =
-                        get_jpeg_from_cache_or_igdb(image_id, ImageSize::Original).await?;
+                        get_jpeg_from_cache_or_igdb(image_id, ImageSize::Original)?;
                     let scaled_image =
                         match resize_image(None, Some(400), ImageFormat::Jpeg, &original_image) {
                             Ok(image) => image,
                             Err(e) => panic!("resizing failed: {:?}", e), // FIXME: Unexpected EOF, failed to fill whole buffer
                         };
-                    let mut file = File::create(&scaled_image_path).await?;
-                    file.write_all(scaled_image.as_ref()).await?;
+                    let mut file = File::create(&scaled_image_path)?;
+                    file.write_all(scaled_image.as_ref())?;
                     Ok(scaled_image)
                 }
             }

@@ -1,8 +1,9 @@
-use image::{ImageFormat};
+use image::ImageFormat;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashSet;
+use std::io::Read;
 use std::time::{Duration, Instant};
-use surf::{get, post};
+use ureq::{get, post, Response};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ImageDescription {
@@ -115,14 +116,14 @@ pub struct Game {
 
 #[derive(Debug)]
 pub enum Error {
-    Auth(surf::StatusCode, String),
+    Auth(u16, String),
 }
 
 const IGDB_ENDPOINT: &str = "https://api.igdb.com/v4";
 const IGDB_QUERY_LIMIT: usize = 500; // Explained at https://api-docs.igdb.com/#pagination
 const IGDB_REQUEST_COOLDOWN: u64 = 250; // Explained at https://api-docs.igdb.com/#rate-limits
 
-pub async fn get_games<T>(
+pub fn get_games<T>(
     client_id: &str,
     access_token: &str,
     last_request: &mut Instant,
@@ -166,17 +167,15 @@ where
             conditions = conditions,
             limit = IGDB_QUERY_LIMIT
         );
-        sleep_for_cooldown(last_request).await;
-        let mut response = post(&format!("{}/games", IGDB_ENDPOINT))
-            .header("client-id", client_id)
-            .header("authorization", format!("Bearer {}", access_token))
-            .body(query)
-            .send()
-            .await
+        sleep_for_cooldown(last_request);
+        let response = post(&format!("{}/games", IGDB_ENDPOINT))
+            .set("client-id", client_id)
+            .set("authorization", &format!("Bearer {}", access_token))
+            .send_string(&query)
             .unwrap();
 
         *last_request = Instant::now();
-        let mut queried_games: Vec<Game> = handle_response(&mut response).await?;
+        let mut queried_games: Vec<Game> = handle_response(response)?;
         games.append(&mut queried_games);
         requests += 1;
     }
@@ -184,49 +183,45 @@ where
     Ok(games)
 }
 
-pub async fn get_genres(
+pub fn get_genres(
     client_id: &str,
     access_token: &str,
     last_request: &mut Instant,
 ) -> Result<Vec<Genre>, Error> {
-    sleep_for_cooldown(last_request).await;
+    sleep_for_cooldown(last_request);
     let query = format!("fields id, name, slug; limit {};", IGDB_QUERY_LIMIT);
-    let mut response = post(&format!("{}/genres", IGDB_ENDPOINT))
-        .header("client-id", client_id)
-        .header("authorization", format!("Bearer {}", access_token))
-        .body(query)
-        .send()
-        .await
+    let response = post(&format!("{}/genres", IGDB_ENDPOINT))
+        .set("client-id", client_id)
+        .set("authorization", &format!("Bearer {}", access_token))
+        .send_string(&query)
         .unwrap();
 
     *last_request = Instant::now();
-    handle_response(&mut response).await
+    handle_response(response)
 }
 
-pub async fn get_themes(
+pub fn get_themes(
     client_id: &str,
     access_token: &str,
     last_request: &mut Instant,
 ) -> Result<Vec<Theme>, Error> {
-    sleep_for_cooldown(last_request).await;
+    sleep_for_cooldown(last_request);
     let query = format!("fields id, name, slug; limit {};", IGDB_QUERY_LIMIT);
-    let mut response = post(&format!("{}/themes", IGDB_ENDPOINT))
-        .header("client-id", client_id)
-        .header("authorization", format!("Bearer {}", access_token))
-        .body(query)
-        .send()
-        .await
+    let response = post(&format!("{}/themes", IGDB_ENDPOINT))
+        .set("client-id", client_id)
+        .set("authorization", &format!("Bearer {}", access_token))
+        .send_string(&query)
         .unwrap();
 
     *last_request = Instant::now();
-    handle_response(&mut response).await
+    handle_response(response)
 }
 
-async fn sleep_for_cooldown(last_request: &Instant) {
+fn sleep_for_cooldown(last_request: &Instant) {
     let cooldown = Duration::from_millis(IGDB_REQUEST_COOLDOWN);
     let elapsed = last_request.elapsed();
     if cooldown > elapsed {
-        async_std::task::sleep(cooldown - elapsed).await;
+        std::thread::sleep(cooldown - elapsed);
     }
 }
 
@@ -243,15 +238,15 @@ struct IgdbQueryError {
     pub cause: String,
 }
 
-async fn handle_response<T>(response: &mut surf::Response) -> Result<T, Error>
+fn handle_response<T>(response: Response) -> Result<T, Error>
 where
     T: DeserializeOwned,
 {
     let code = response.status();
-    let body = response.body_string().await.unwrap();
+    let body = response.into_string().unwrap();
 
     if code == 401 || code == 403 {
-        let error: serde_json::Result<IgdbAuthError> = serde_json::from_str(&body);
+        let error = serde_json::from_str::<IgdbAuthError>(&body);
         let message = match error {
             Ok(error) => error.message,
             Err(_) => String::new(),
@@ -263,8 +258,7 @@ where
         let errors: Vec<IgdbQueryError> = serde_json::from_str(&body).unwrap();
         panic!("{:?}", errors);
     } else {
-        let data: serde_json::Result<T> = serde_json::from_str(&body);
-        match data {
+        match serde_json::from_str::<T>(&body) {
             Ok(data) => Ok(data),
             Err(err) => {
                 println!("{}", err);
@@ -315,44 +309,38 @@ impl Image {
 pub enum ImageError {
     UnsupportedFormat(String),
     MissingFormat,
-    BadResponse(surf::Error),
+    BadResponse(ureq::Error),
 }
 
-pub async fn get_image(id: &str) -> Result<Image, ImageError> {
+pub fn get_image(id: &str) -> Result<Image, ImageError> {
     let url = format!(
         "https://images.igdb.com/igdb/image/upload/t_original/{}.foobar", // IGDB ignores the extension; we can request anything.
         id
     );
-    let mut response = get(url).send().await.map_err(ImageError::BadResponse)?;
-    let content_type = response
-        .header("content-type")
-        .and_then(|content_types| content_types.get(0))
-        .map(|content_type| content_type.as_str());
+    let response = get(&url).call().map_err(ImageError::BadResponse)?;
+    let content_type = response.header("content-type");
     match content_type {
-        Some("image/jpeg") => Ok(Image::Jpeg(
-            response
-                .body_bytes()
-                .await
-                .map_err(ImageError::BadResponse)?,
-        )),
-        Some("image/png") => Ok(Image::Png(
-            response
-                .body_bytes()
-                .await
-                .map_err(ImageError::BadResponse)?,
-        )),
-        Some("image/gif") => Ok(Image::Gif(
-            response
-                .body_bytes()
-                .await
-                .map_err(ImageError::BadResponse)?,
-        )),
-        Some("image/webp") => Ok(Image::Webp(
-            response
-                .body_bytes()
-                .await
-                .map_err(ImageError::BadResponse)?,
-        )),
+        Some("image/jpeg") => {
+            let mut image = Vec::with_capacity(1_000_000);
+            response.into_reader().read_to_end(&mut image).unwrap();
+            Ok(Image::Jpeg(image))
+        }
+        Some("image/png") => {
+            let mut image = Vec::with_capacity(1_000_000);
+            response.into_reader().read_to_end(&mut image).unwrap();
+            Ok(Image::Png(image))
+        }
+        Some("image/gif") => {
+            let mut image = Vec::with_capacity(1_000_000);
+            response.into_reader().read_to_end(&mut image).unwrap();
+            Ok(Image::Gif(image))
+        }
+        Some("image/webp") => {
+            let mut image = Vec::with_capacity(1_000_000);
+            response.into_reader().read_to_end(&mut image).unwrap();
+            Ok(Image::Webp(image))
+        }
+
         Some(format) => Err(ImageError::UnsupportedFormat(format.to_owned())),
         None => Err(ImageError::MissingFormat),
     }

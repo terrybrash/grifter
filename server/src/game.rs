@@ -1,10 +1,9 @@
 use crate::config::{self, Config};
 use crate::igdb;
 use crate::twitch;
-use async_std::fs;
-use futures::future::join_all;
 use serde::Serialize;
 use std::fmt;
+use std::fs;
 use std::path::PathBuf;
 use unicode_normalization::UnicodeNormalization;
 
@@ -24,7 +23,7 @@ impl fmt::Display for Warning {
     }
 }
 
-pub async fn games_from_config(
+pub fn games_from_config(
     config: &Config,
     last_request: &mut std::time::Instant,
 ) -> Result<(Vec<Game>, Vec<Warning>)> {
@@ -39,20 +38,20 @@ pub async fn games_from_config(
         last_request,
         &slugs,
     )
-    .await
     .unwrap();
 
-    let games = igdb_games.into_iter().map(|igdb_game| async {
-        let g = config
-            .games
-            .iter()
-            .find(|i| i.slug == igdb_game.slug)
-            .unwrap();
-        let metadata = fs::metadata(config.root.join(&g.path)).await.unwrap();
-        game(igdb_game, g, metadata, config)
-    });
-
-    let mut games: Vec<Game> = join_all(games).await;
+    let mut games: Vec<Game> = igdb_games
+        .into_iter()
+        .map(|igdb_game| {
+            let g = config
+                .games
+                .iter()
+                .find(|i| i.slug == igdb_game.slug)
+                .unwrap();
+            let metadata = fs::metadata(config.root.join(&g.path)).unwrap();
+            game(igdb_game, g, metadata, config)
+        })
+        .collect();
 
     games.sort_by(|a, b| a.name.cmp(&b.name));
 

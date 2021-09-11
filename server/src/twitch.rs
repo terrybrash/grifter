@@ -20,23 +20,23 @@ pub struct AuthenticationError {
 }
 
 pub fn authenticate(client_id: &str, client_secret: &str) -> Result<Authentication, Error> {
-    let mut request = post("https://id.twitch.tv/oauth2/token");
-    request
+    let response = post("https://id.twitch.tv/oauth2/token")
         .query("client_id", client_id)
         .query("client_secret", client_secret)
-        .query("grant_type", "client_credentials");
+        .query("grant_type", "client_credentials")
+        .call()
+        .unwrap();
 
-    let response = request.call();
-    if response.client_error() {
-        let status = response.status();
-        let error = response
-            .into_json_deserialize::<AuthenticationError>()
-            .unwrap();
-        Err(Error::ClientError(status, error.message))
-    } else if response.error() {
-        Err(Error::Other(response.status()))
-    } else {
-        let auth = response.into_json_deserialize::<Authentication>().unwrap();
-        Ok(auth)
+    match response.status() {
+        200 => {
+            let auth = response.into_string().unwrap();
+            let auth = serde_json::from_str::<Authentication>(&auth).unwrap();
+            Ok(auth)
+        }
+        status => {
+            let error = response.into_string().unwrap();
+            let error = serde_json::from_str::<AuthenticationError>(&error).unwrap();
+            Err(Error::ClientError(status, error.message))
+        }
     }
 }

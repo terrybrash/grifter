@@ -6,21 +6,17 @@ name = 'grifter'
 version = '0.2.0'
 
 [dependencies]
-flate2 = '1.0.18'
-serde_json = '1.0.59'
-toml = '0.5.7'
-thiserror = "^1.0"
-unicode-normalization = '0.1.13'
-surf = "2.2.0"
-tide = "0.16.0"
-async-std = { version = "1.9.0", features = ["attributes"] }
-serde = { version = "1.0", features = ["derive"] }
-ureq = { version = "1.5.1", features = ["json"] }
-futures = "0.3.15"
-http-types = "2.11.1"
+flate2 = '1.0.21'
+serde_json = '1.0.67'
+toml = '0.5.8'
+thiserror = "1.0.29"
+unicode-normalization = '0.1.19'
+serde = { version = "1.0.130", features = ["derive"] }
+ureq = { version = "2.2.0" }
 image = "0.23.14"
-openssl-sys = {version = "0.9.65", features = ["vendored"]}
-async-recursion = "0.3.2"
+rouille = "*"
+
+# http-types = "2.11.1"
 
 [build-dependencies]
 walkdir = '2.3.2'
