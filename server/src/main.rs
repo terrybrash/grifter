@@ -64,6 +64,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
             return Ok(());
         }
+        Err(crate::config::Error::BadSsl {
+            missing_certificate,
+            missing_private_key,
+        }) => {
+            println!("You have SSL enabled in \"grifter.toml\" but some files are missing:");
+            println!(
+                "  Certificate: {}",
+                if missing_certificate {
+                    "NOT FOUND"
+                } else {
+                    "Found! This one's ok."
+                }
+            );
+            println!(
+                "  Private Key: {}",
+                if missing_private_key {
+                    "NOT FOUND"
+                } else {
+                    "Found! This one's ok."
+                }
+            );
+            println!("Either disable https, or fix the missing files.");
+            return Ok(());
+        }
     };
 
     let mut last_request = std::time::Instant::now();

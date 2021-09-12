@@ -7,6 +7,7 @@
 Prerequisites:
 
 - Rust (nightly)
+- [Perl](https://strawberryperl.com/)
 - Node
 
 ```bash

@@ -4,7 +4,7 @@ use crate::igdb;
 use crate::twitch;
 use flate2::write::GzEncoder;
 use image::{GenericImageView, ImageFormat};
-use rouille::{router, Request, Response};
+use rouille::{router, Request, Response, Server};
 use serde::Serialize;
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -76,8 +76,7 @@ pub fn start(
         }
     };
 
-    println!("Grifter started on {}:{}", config.address, config.port);
-    rouille::start_server_with_pool((config.address.as_str(), config.port), None, move |request| {
+    let handler = move |request: &Request| -> Response {
         router!(request,
             (GET) ["/api/catalog"] => {catalog(&model, request)},
             (GET) ["/api/download/{slug}", slug: String] => {download(&model, request, &slug)},
@@ -86,7 +85,32 @@ pub fn start(
             (GET) ["/"] => {index(&model, request)},
             _ => index(&model, request),
         )
-    });
+    };
+
+    let server = if config.https {
+        let certificate = fs::read(&config.ssl_certificate).unwrap();
+        let private_key = fs::read(&config.ssl_private_key).unwrap();
+        Server::new_ssl(
+            (config.address.as_str(), config.port),
+            handler,
+            certificate,
+            private_key,
+        )
+        .expect("Failed to start server")
+    } else {
+        Server::new((config.address.as_str(), config.port), handler)
+            .expect("Failed to start server")
+    };
+
+    println!(
+        "Grifter started on {}://{}:{}",
+        if config.https { "https" } else { "http" },
+        config.address,
+        config.port
+    );
+    server.pool_size(8 * num_cpus::get()).run();
+
+    panic!("The server closed unexpectedly");
 }
 
 fn index(model: &Model, _: &Request) -> Response {

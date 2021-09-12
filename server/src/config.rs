@@ -38,6 +38,12 @@ pub enum Error {
 
     #[error("not finished setting up")]
     NotFinishedSettingUp,
+
+    #[error("ssl is enabled but incorrectly configured")]
+    BadSsl {
+        missing_certificate: bool,
+        missing_private_key: bool,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -56,6 +62,10 @@ pub struct Config {
     pub games: Vec<Game>,
     pub address: String,
     pub port: u16,
+
+    pub https: bool,
+    pub ssl_certificate: PathBuf,
+    pub ssl_private_key: PathBuf,
 }
 
 impl Config {
@@ -64,6 +74,17 @@ impl Config {
 
         if !config.im_finished_setting_up {
             return Err(Error::NotFinishedSettingUp);
+        }
+
+        if config.https {
+            let is_certificate_ok = fs::File::open(&config.ssl_certificate).is_ok();
+            let is_private_key_ok = fs::File::open(&config.ssl_private_key).is_ok();
+            if !is_certificate_ok || !is_private_key_ok {
+                return Err(Error::BadSsl {
+                    missing_certificate: !is_certificate_ok,
+                    missing_private_key: !is_private_key_ok,
+                });
+            }
         }
 
         // Check for executables that exist but aren't listed in the config file.
@@ -117,6 +138,9 @@ pub const EXAMPLE_CONFIG: &str =
     # These are optional server settings. You don't have to configure them; the defaults will work just fine.\n\
     address = \"0.0.0.0\"\n\
     port = 39090\n\
+    https = false\n\
+    ssl_certificate = './cert.pem'\n\
+    ssl_private_key = './privkey.pem'\n\
     \n\
     # Now, list all of your games below, each beginning with a `[[games]]` and\n\
     # containing both the \"path\" and the \"slug\" for each game.\n\

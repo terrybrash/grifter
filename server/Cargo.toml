@@ -14,9 +14,9 @@ unicode-normalization = '0.1.19'
 serde = { version = "1.0.130", features = ["derive"] }
 ureq = { version = "2.2.0" }
 image = "0.23.14"
-rouille = "*"
-
-# http-types = "2.11.1"
+rouille = { version = "3.2.1", features = ["ssl"] }
+openssl-sys = { version = "0.9.66", features = ["vendored"] }
+num_cpus = "1.13.0"
 
 [build-dependencies]
 walkdir = '2.3.2'
