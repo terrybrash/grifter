@@ -111,7 +111,15 @@ fn download(model: &Model, _: &Request, slug: &str) -> Response {
         }
     };
 
-    Response::from_file("application/octet-stream", file)
+    let save_as = game
+        .path
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or(slug);
+    Response::from_file("application/octet-stream", file).with_unique_header(
+        "content-disposition",
+        format!("attachment; filename=\"{}\"", save_as),
+    )
 }
 
 fn favicon() -> Response {
