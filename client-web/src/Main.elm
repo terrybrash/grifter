@@ -174,8 +174,8 @@ view : Model -> Document Msg
 view model =
     case model of
         Loading _ ->
-            { title = "Grifter - Loading"
-            , body = [ Html.Styled.text "Loading..." ]
+            { title = "Grifter"
+            , body = []
             }
 
         NotFound ->

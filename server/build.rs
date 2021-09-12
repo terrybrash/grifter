@@ -89,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         <head>
             <meta charset="UTF-8">
             <title>Grifter</title>
-            <style>body {{ padding: 0; margin: 0; }}</style>
+            <style>body {{ padding: 0; margin: 0; background-color: #fcfbf9; }}</style>
         </head>
         <body>
             <div id="main"></div>
