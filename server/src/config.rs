@@ -35,6 +35,9 @@ pub enum Error {
 
     #[error("bad root")]
     BadRoot(std::io::Error),
+
+    #[error("not finished setting up")]
+    NotFinishedSettingUp,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -45,6 +48,7 @@ pub struct Game {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
+    pub im_finished_setting_up: bool,
     pub root: PathBuf,
     pub twitch_client_id: String,
     pub twitch_client_secret: String,
@@ -57,6 +61,10 @@ pub struct Config {
 impl Config {
     pub fn from_str(text: &str) -> Result<(Self, Vec<Warning>), Error> {
         let mut config: Config = toml::from_str(text).map_err(Error::BadToml)?;
+
+        if !config.im_finished_setting_up {
+            return Err(Error::NotFinishedSettingUp);
+        }
 
         // Check for executables that exist but aren't listed in the config file.
         let root = fs::read_dir(&config.root).map_err(Error::BadRoot)?;
@@ -94,37 +102,39 @@ impl Config {
 }
 
 pub const EXAMPLE_CONFIG: &str =
-    "# This is the folder containing your games.\n\
-    root = '/path/to/all/my/games'\n\
-
+    "# Read through this entire config to get set up. When you're done, set this to true!\n\
+    # This config file is written in TOML. You can get familiar with the syntax of TOML here: https://toml.io/\n\
+    im_finished_setting_up = false\n\
     \n\
-    address = \"0.0.0.0\"\n\
-    port = 39090\n\
-
+    # This is the folder containing your games.\n\
+    root = '/path/to/all/my/games'\n\
     \n\
     # Create a new Twitch application and get the client id and secret.\n\
     # Go here to learn how to do that: https://api-docs.igdb.com/#account-creation\n\
     twitch_client_id = '11b084af98ea18caafcae608a9a0e89c' # This is totally fake. Replace it! \n\
     twitch_client_secret = '11b084af98ea18caafcae608a9a0e89c' # This is totally fake. Replace it! \n\
     \n\
+    # These are optional server settings. You don't have to configure them; the defaults will work just fine.\n\
+    address = \"0.0.0.0\"\n\
+    port = 39090\n\
+    \n\
     # Now, list all of your games below, each beginning with a `[[games]]` and\n\
     # containing both the \"path\" and the \"slug\" for each game.\n\
     # - \"path\" is the filename of the game, relative to \"root\". It can be nested within a folder.\n\
     # - \"slug\" is the IGDB id, otherwise known as a slug.\n\
     \n\
-    # I've put some example games here:\n\
+    # Here are three example games:\n\
+    [[games]]\n\
+    path = 'Cave Story.zip'\n\
+    slug = 'cave-story'\n\
     \n\
-    # [[games]]\n\
-    # path = 'Cave Story.zip'\n\
-    # slug = 'cave-story'\n\
+    [[games]]\n\
+    path = 'Diablo 2, Lord of Destruction.exe'\n\
+    slug = 'diablo-ii'\n\
     \n\
-    # [[games]]\n\
-    # path = 'Diablo 2, Lord of Destruction.exe'\n\
-    # slug = 'diablo-ii'\n\
-    \n\
-    # [[games]]\n\
-    # path = 'The Witness.zip'\n\
-    # slug = 'the-witness'\n\
+    [[games]]\n\
+    path = 'The Witness.zip'\n\
+    slug = 'the-witness'\n\
     ";
 
 fn drain_duplicates(games: &mut Vec<Game>) -> Vec<Vec<Game>> {

@@ -55,6 +55,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("The toml docs are really helpful, check them out: https://toml.io/");
             return Ok(());
         }
+        Err(crate::config::Error::NotFinishedSettingUp) => {
+            println!(
+                "The server can't be started until you're finished configuring \"grifter.toml\"."
+            );
+            println!(
+                "When you're done, change the first value in that file to: im_finished_setting_up = true"
+            );
+            return Ok(());
+        }
     };
 
     let mut last_request = std::time::Instant::now();
