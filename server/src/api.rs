@@ -144,9 +144,9 @@ fn image(_: &Model, request: &Request, image_id: &str) -> Response {
         _ => return Response::empty_404(),
     };
 
-    // .header("cache-control", "max-age=31536000, immutable")
     match get_jpeg_from_cache_or_igdb(image_id, size) {
-        Ok(image) => Response::from_data("image/jpeg", image),
+        Ok(image) => Response::from_data("image/jpeg", image)
+            .with_unique_header("cache-control", "max-age=10368000, immutable"), // 10368000 seconds = 120 days
         Err(_) => Response::empty_404(),
     }
 }
