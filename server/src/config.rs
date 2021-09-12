@@ -50,6 +50,8 @@ pub struct Config {
     pub twitch_client_secret: String,
     #[serde(default)]
     pub games: Vec<Game>,
+    pub address: String,
+    pub port: u16,
 }
 
 impl Config {
@@ -94,6 +96,11 @@ impl Config {
 pub const EXAMPLE_CONFIG: &str =
     "# This is the folder containing your games.\n\
     root = '/path/to/all/my/games'\n\
+
+    \n\
+    address = \"0.0.0.0\"\n\
+    port = 39090\n\
+
     \n\
     # Create a new Twitch application and get the client id and secret.\n\
     # Go here to learn how to do that: https://api-docs.igdb.com/#account-creation\n\
