@@ -77,7 +77,7 @@ pub fn start(
     };
 
     println!("Grifter started on {}:{}", config.address, config.port);
-    rouille::start_server((config.address.as_str(), config.port), move |request| {
+    rouille::start_server_with_pool((config.address.as_str(), config.port), None, move |request| {
         router!(request,
             (GET) ["/api/catalog"] => {catalog(&model, request)},
             (GET) ["/api/download/{slug}", slug: String] => {download(&model, request, &slug)},
