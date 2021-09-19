@@ -1,6 +1,6 @@
 # Grifter
 
-[![screenshot](screenshot.png)](https://grfiter.gg/)
+[![screenshot](screenshot.png)](https://grifter.gg/)
 
 ## How to build
 
