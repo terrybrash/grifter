@@ -61,7 +61,8 @@ pub struct Config {
     #[serde(default)]
     pub games: Vec<Game>,
     pub address: String,
-    pub port: u16,
+    pub http_port: u16,
+    pub https_port: u16,
 
     pub https: bool,
     pub ssl_certificate: PathBuf,
@@ -137,7 +138,8 @@ pub const EXAMPLE_CONFIG: &str =
     \n\
     # These are optional server settings. You don't have to configure them; the defaults will work just fine.\n\
     address = \"0.0.0.0\"\n\
-    port = 39090\n\
+    http_port = 39090 # default is 80\n\
+    https_port = 39091 # default is 443\n\
     https = false\n\
     ssl_certificate = './cert.pem'\n\
     ssl_private_key = './privkey.pem'\n\

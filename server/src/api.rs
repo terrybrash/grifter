@@ -76,7 +76,46 @@ pub fn start(
         }
     };
 
+    if config.https {
+        // Since we're going to start an https server, we'll want to redirect all http traffic
+        // to the https. So we'll start an http server whose sole purpose is to redirect to the
+        // https server.
+        let http_port = config.http_port;
+        let https_port = config.https_port;
+        let address = config.address.clone();
+        std::thread::spawn(move || {
+            rouille::start_server((address, http_port), move |request| {
+                match request.header("host") {
+                    Some(host) => {
+                        let host_without_port: String =
+                            host.chars().take_while(|&c| c != ':').collect();
+                        let destination = if https_port == 443 {
+                            format!("https://{}{}", host_without_port, request.raw_url())
+                        } else {
+                            format!(
+                                "https://{}:{}{}",
+                                host_without_port,
+                                https_port,
+                                request.raw_url()
+                            )
+                        };
+                        Response::redirect_301(destination)
+                    }
+                    None => Response::empty_400(),
+                }
+            });
+        });
+    }
+
+    let is_https_enabled = config.https;
     let handler = move |request: &Request| -> Response {
+        println!(
+            "{} to {}:{}",
+            request.remote_addr().ip(),
+            if is_https_enabled { "https" } else { "http" },
+            request.raw_url()
+        );
+
         router!(request,
             (GET) ["/api/catalog"] => {catalog(&model, request)},
             (GET) ["/api/download/{slug}", slug: String] => {download(&model, request, &slug)},
@@ -87,29 +126,34 @@ pub fn start(
         )
     };
 
-    let server = if config.https {
+    if config.https {
         let certificate = fs::read(&config.ssl_certificate).unwrap();
         let private_key = fs::read(&config.ssl_private_key).unwrap();
+        println!(
+            "Grifter started on https://{}:{}",
+            config.address, config.https_port
+        );
         Server::new_ssl(
-            (config.address.as_str(), config.port),
+            (config.address.as_str(), config.https_port),
             handler,
             certificate,
             private_key,
         )
         .expect("Failed to start server")
+        .pool_size(8 * num_cpus::get())
+        .run()
     } else {
-        Server::new((config.address.as_str(), config.port), handler)
+        println!(
+            "Grifter started on http://{}:{}",
+            config.address, config.http_port
+        );
+        Server::new((config.address.as_str(), config.http_port), handler)
             .expect("Failed to start server")
+            .pool_size(8 * num_cpus::get())
+            .run();
     };
 
-    println!(
-        "Grifter started on {}://{}:{}",
-        if config.https { "https" } else { "http" },
-        config.address,
-        config.port
-    );
-    server.pool_size(8 * num_cpus::get()).run();
-
+    // Will only reach here if the server crashes.
     panic!("The server closed unexpectedly");
 }
 
