@@ -272,6 +272,7 @@ dependencies = [
 name = "grifter"
 version = "0.2.0"
 dependencies = [
+ "crossbeam-channel",
  "flate2",
  "image",
  "num_cpus",

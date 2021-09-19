@@ -92,42 +92,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for warning in warnings {
         println!("Warning: {}", warning);
     }
-
     println!("Indexed {} games.", games.len());
+
+    let (sender, receiver) = crossbeam_channel::unbounded();
+    let prefetch_threads = config
+        .prefetch_threads
+        .map(|threads| num_cpus::get() * threads)
+        .unwrap_or_else(num_cpus::get);
+    std::thread::spawn(move || {
+        api::image_prefetch_pool(prefetch_threads, receiver);
+    });
+    for game in &games {
+        for screenshot in &game.screenshots {
+            sender.send(screenshot.id.clone()).unwrap();
+        }
+        if let Some(cover) = &game.cover {
+            sender.send(cover.id.clone()).unwrap();
+        }
+    }
 
     api::start(&config, &mut last_request, games).unwrap();
     Ok(())
 }
-
-// for game in &games {
-//     for screenshot in &game.screenshots {
-//         let url = format!(
-//             "https://images.igdb.com/igdb/image/upload/t_original/{}.xxx",
-//             screenshot.id
-//         );
-//         let mut response = surf::get(url).send().await.unwrap();
-//         // match response.content_type() {
-//         //     Some("image/jpeg") => {
-//         //         await response.
-//         //     }
-//         //     _ => {},
-//         // };
-//         let content_type = response
-//             .header("content-type")
-//             .and_then(|content_types| content_types.get(0))
-//             .map(|content_type| content_type.as_str());
-//         // match content_type {
-//         //     Some("image/jpeg") => Ok(ImageData::Jpeg(response.body_bytes().await.unwrap())),
-//         //     Some("image/png") => Ok(ImageData::Png(response.body_bytes().await.unwrap())),
-//         //     Some("image/gif") => Ok(ImageData::Gif(response.body_bytes().await.unwrap())),
-//         //     Some("image/webp") => Ok(ImageData::Webp(response.body_bytes().await.unwrap())),
-//         //     Some(format) => Ok(ImageData::Unsupported(format.to_owned())),
-//         //     None => Ok(ImageData::Unknown),
-//         // }
-
-//         let _ = api::get_jpeg_from_cache_or_igdb(&screenshot.id, None, None)
-//             .await
-//             .unwrap();
-//         println!("{}", screenshot.id);
-//     }
-// }

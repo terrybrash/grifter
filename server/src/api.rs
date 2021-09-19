@@ -2,8 +2,9 @@ use crate::config::Config;
 use crate::game::Game;
 use crate::igdb;
 use crate::twitch;
+use crossbeam_channel::{bounded, Receiver, Sender};
 use flate2::write::GzEncoder;
-use image::{GenericImageView, ImageFormat};
+use image::GenericImageView;
 use rouille::{router, Request, Response, Server};
 use serde::Serialize;
 use std::fs::{self, File};
@@ -212,8 +213,13 @@ fn image(_: &Model, request: &Request, image_id: &str) -> Response {
         _ => return Response::empty_404(),
     };
 
-    match get_jpeg_from_cache_or_igdb(image_id, size) {
-        Ok(image) => Response::from_data("image/jpeg", image)
+    let path = match size {
+        ImageSize::Thumbnail => image_cache(image_id).join("thumbnail.jpeg"),
+        ImageSize::Original => image_cache(image_id).join("original.jpeg"),
+    };
+
+    match std::fs::File::open(path) {
+        Ok(image) => Response::from_file("image/jpeg", image)
             .with_unique_header("cache-control", "max-age=10368000, immutable"), // 10368000 seconds = 120 days
         Err(_) => Response::empty_404(),
     }
@@ -238,59 +244,82 @@ fn image_cache(image_id: &str) -> PathBuf {
     image_dir
 }
 
-fn get_jpeg_from_cache_or_igdb(image_id: &str, size: ImageSize) -> Result<Vec<u8>, std::io::Error> {
-    let image_dir = image_cache(image_id);
-    match size {
-        ImageSize::Original => {
-            let original_image_path = image_dir.join("original.jpeg");
-            match fs::read(&original_image_path) {
-                Ok(original_image) => Ok(original_image),
-                Err(_) => {
-                    let original_image = igdb::get_image(image_id).unwrap();
-                    let jpeg = original_image.into_jpeg().unwrap();
-                    let mut file = File::create(&original_image_path)?;
-                    file.write_all(jpeg.as_ref())?;
-                    Ok(jpeg)
-                }
+struct JobThread {
+    is_busy: bool,
+    sender: Sender<String>,
+}
+
+pub fn image_prefetch_pool(thread_count: usize, jobs: Receiver<String>) {
+    let mut threads = Vec::with_capacity(thread_count);
+    let (on_complete, job_finished) = bounded(thread_count);
+    for thread in 0..thread_count {
+        let (s, r) = bounded(1);
+        let on_complete = on_complete.clone();
+        std::thread::spawn(move || image_prefetch_worker(thread, r, on_complete));
+        threads.push(JobThread {
+            is_busy: false,
+            sender: s,
+        });
+    }
+
+    for job in jobs.into_iter() {
+        let free_thread = threads.iter_mut().find(|thread| !thread.is_busy);
+        match free_thread {
+            Some(thread) => {
+                thread.is_busy = true;
+                thread.sender.send(job).unwrap();
             }
-        }
-        ImageSize::Thumbnail => {
-            let scaled_image_path = image_dir.join("thumbnail.jpeg");
-            match fs::read(&scaled_image_path) {
-                Ok(scaled_image) => Ok(scaled_image),
-                Err(_) => {
-                    let original_image =
-                        get_jpeg_from_cache_or_igdb(image_id, ImageSize::Original)?;
-                    let scaled_image =
-                        match resize_image(None, Some(400), ImageFormat::Jpeg, &original_image) {
-                            Ok(image) => image,
-                            Err(e) => panic!("resizing failed: {:?}", e), // FIXME: Unexpected EOF, failed to fill whole buffer
-                        };
-                    let mut file = File::create(&scaled_image_path)?;
-                    file.write_all(scaled_image.as_ref())?;
-                    Ok(scaled_image)
-                }
+            None => {
+                // now we wait for a thread
+                let thread_index = job_finished.recv().unwrap();
+                threads[thread_index].sender.send(job).unwrap(); // no rest, get back to work lmao
             }
         }
     }
 }
 
-fn resize_image<T: AsRef<[u8]>>(
-    max_width: Option<u32>,
-    max_height: Option<u32>,
-    image_format: ImageFormat,
-    jpeg_bytes: T,
-) -> image::error::ImageResult<Vec<u8>> {
-    let original_image = image::load_from_memory_with_format(jpeg_bytes.as_ref(), image_format)?;
-    let (mut width, mut height) = original_image.dimensions();
+fn image_prefetch_worker(thread: usize, receiver: Receiver<String>, on_complete: Sender<usize>) {
+    for image_id in receiver.into_iter() {
+        let cache = image_cache(&image_id);
+        let original_path = cache.join("original.jpeg");
+        let original = match image::open(&original_path) {
+            Ok(original) => original,
+            Err(_) => {
+                let image = igdb::get_image(&image_id).unwrap();
+                let original =
+                    image::load_from_memory_with_format(&image.bytes[..], image.format).unwrap();
+                original
+                    .save_with_format(&original_path, image::ImageFormat::Jpeg)
+                    .unwrap();
+                original
+            }
+        };
+
+        let thumbnail_path = cache.join("thumbnail.jpeg");
+        let _thumbnail = match image::open(&thumbnail_path) {
+            Ok(thumbnail) => thumbnail,
+            Err(_) => {
+                let (tw, th) = max_dimensions(original.dimensions(), (None, Some(400)));
+                let thumbnail = original.thumbnail(tw, th);
+                thumbnail
+                    .save_with_format(&thumbnail_path, image::ImageFormat::Jpeg)
+                    .unwrap();
+                thumbnail
+            }
+        };
+        println!("Loaded: {}", image_id);
+        on_complete.send(thread).unwrap();
+    }
+}
+
+fn max_dimensions(dimensions: (u32, u32), max: (Option<u32>, Option<u32>)) -> (u32, u32) {
+    let (mut width, mut height) = dimensions;
+    let (max_width, max_height) = max;
     if let Some(max_width) = max_width {
         width = u32::min(width, max_width);
     }
     if let Some(max_height) = max_height {
         height = u32::min(height, max_height);
     }
-    let scaled_image = original_image.thumbnail(width, height);
-    let mut jpeg_bytes_scaled: Vec<u8> = Vec::new();
-    scaled_image.write_to(&mut jpeg_bytes_scaled, image_format)?;
-    Ok(jpeg_bytes_scaled)
+    (width, height)
 }

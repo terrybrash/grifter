@@ -17,6 +17,7 @@ image = "0.23.14"
 rouille = { version = "3.3.0", features = ["ssl"] }
 openssl-sys = { version = "0.9.66", features = ["vendored"] }
 num_cpus = "1.13.0"
+crossbeam-channel = "0.5.1"
 
 [build-dependencies]
 walkdir = '2.3.2'

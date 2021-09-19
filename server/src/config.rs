@@ -67,6 +67,8 @@ pub struct Config {
     pub https: bool,
     pub ssl_certificate: PathBuf,
     pub ssl_private_key: PathBuf,
+
+    pub prefetch_threads: Option<usize>, // for performance benchmarking only atm
 }
 
 impl Config {

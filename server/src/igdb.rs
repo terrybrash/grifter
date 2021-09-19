@@ -272,37 +272,9 @@ where
     }
 }
 
-pub enum Image {
-    Jpeg(Vec<u8>),
-    Png(Vec<u8>),
-    Webp(Vec<u8>),
-    Gif(Vec<u8>),
-}
-
-impl Image {
-    pub fn into_jpeg(self) -> Result<Vec<u8>, image::ImageError> {
-        match self {
-            Image::Jpeg(jpeg) => Ok(jpeg),
-            Image::Png(png) => {
-                let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-                image::load_from_memory_with_format(&png, ImageFormat::Png)?
-                    .write_to(&mut jpeg, ImageFormat::Jpeg)?;
-                Ok(jpeg)
-            }
-            Image::Webp(webp) => {
-                let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-                image::load_from_memory_with_format(&webp, ImageFormat::WebP)?
-                    .write_to(&mut jpeg, ImageFormat::Jpeg)?;
-                Ok(jpeg)
-            }
-            Image::Gif(gif) => {
-                let mut jpeg: Vec<u8> = Vec::with_capacity(1_000_000);
-                image::load_from_memory_with_format(&gif, ImageFormat::Gif)?
-                    .write_to(&mut jpeg, ImageFormat::Jpeg)?;
-                Ok(jpeg)
-            }
-        }
-    }
+pub struct Image {
+    pub bytes: Vec<u8>,
+    pub format: ImageFormat,
 }
 
 #[derive(Debug)]
@@ -310,6 +282,7 @@ pub enum ImageError {
     UnsupportedFormat(String),
     MissingFormat,
     BadResponse(ureq::Error),
+    BadRead(std::io::Error),
 }
 
 pub fn get_image(id: &str) -> Result<Image, ImageError> {
@@ -318,30 +291,23 @@ pub fn get_image(id: &str) -> Result<Image, ImageError> {
         id
     );
     let response = get(&url).call().map_err(ImageError::BadResponse)?;
-    let content_type = response.header("content-type");
-    match content_type {
-        Some("image/jpeg") => {
-            let mut image = Vec::with_capacity(1_000_000);
-            response.into_reader().read_to_end(&mut image).unwrap();
-            Ok(Image::Jpeg(image))
-        }
-        Some("image/png") => {
-            let mut image = Vec::with_capacity(1_000_000);
-            response.into_reader().read_to_end(&mut image).unwrap();
-            Ok(Image::Png(image))
-        }
-        Some("image/gif") => {
-            let mut image = Vec::with_capacity(1_000_000);
-            response.into_reader().read_to_end(&mut image).unwrap();
-            Ok(Image::Gif(image))
-        }
-        Some("image/webp") => {
-            let mut image = Vec::with_capacity(1_000_000);
-            response.into_reader().read_to_end(&mut image).unwrap();
-            Ok(Image::Webp(image))
-        }
-
-        Some(format) => Err(ImageError::UnsupportedFormat(format.to_owned())),
-        None => Err(ImageError::MissingFormat),
-    }
+    let format = match response.header("content-type") {
+        Some("image/jpeg") => ImageFormat::Jpeg,
+        Some("image/png") => ImageFormat::Png,
+        Some("image/gif") => ImageFormat::Gif,
+        Some("image/webp") => ImageFormat::WebP,
+        Some("image/bmp") => ImageFormat::Bmp,
+        Some("image/tiff") => ImageFormat::Tiff,
+        Some(mime) => return Err(ImageError::UnsupportedFormat(mime.to_owned())),
+        None => return Err(ImageError::MissingFormat),
+    };
+    let mut image = Vec::with_capacity(1_000_000);
+    response
+        .into_reader()
+        .read_to_end(&mut image)
+        .map_err(ImageError::BadRead)?;
+    Ok(Image {
+        bytes: image,
+        format,
+    })
 }
