@@ -299,7 +299,7 @@ fn image_prefetch_worker(thread: usize, receiver: Receiver<String>, on_complete:
         let _thumbnail = match image::open(&thumbnail_path) {
             Ok(thumbnail) => thumbnail,
             Err(_) => {
-                let (tw, th) = max_dimensions(original.dimensions(), (None, Some(400)));
+                let (tw, th) = max_dimensions(original.dimensions(), (None, Some(200)));
                 let thumbnail = original.thumbnail(tw, th);
                 thumbnail
                     .save_with_format(&thumbnail_path, image::ImageFormat::Jpeg)
