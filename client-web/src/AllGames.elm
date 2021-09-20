@@ -265,7 +265,7 @@ view catalog model =
             , marginRight auto
             ]
         ]
-        [ Css.Global.global [ Css.Global.body [ backgroundColor Shared.yellow100 ] ]
+        [ Css.Global.global [ Css.Global.body [ backgroundColor Shared.yellow100, overflowY scroll ] ]
         , div
             [ css
                 [ padding (px 30)
