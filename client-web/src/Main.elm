@@ -193,9 +193,7 @@ view model =
                 AllGames ->
                     { title = "Grifter"
                     , body =
-                        [ linkStylesheet "https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap"
-                        , linkStylesheet "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-                        , Reset.meyerV2
+                        [ Reset.meyerV2
                         , AllGames.view loaded.catalog loaded.allGames |> Html.Styled.map MsgAllGames
                         ]
                     }
@@ -203,9 +201,7 @@ view model =
                 SingleGame game ->
                     { title = game.name ++ " - " ++ "Grifter"
                     , body =
-                        [ linkStylesheet "https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap"
-                        , linkStylesheet "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-                        , Reset.meyerV2
+                        [ Reset.meyerV2
                         , SingleGame.view loaded.catalog game |> Html.Styled.map MsgSingleGame
                         ]
                     }
