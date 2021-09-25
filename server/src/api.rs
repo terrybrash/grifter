@@ -201,6 +201,7 @@ fn index(model: &Model, _: &Request) -> Response {
         "frame-src https://www.youtube-nocookie.com/",
         "base-uri 'none'",
         "require-trusted-types-for 'script'",
+        "form-action 'none'",
     ];
     Response::from_data(index.mime, index.bytes.clone())
         .with_unique_header("content-security-policy", csp.join("; "))
