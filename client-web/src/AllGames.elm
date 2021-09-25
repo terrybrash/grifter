@@ -363,6 +363,7 @@ viewSidebar catalog model =
     in
     div []
         [ viewSearch model.search
+        , div [ css [ fontSize (em 0.8), color (hex "a2a2a2"), marginTop (em 1) ] ] [ text "Tip: start typing anytime to search." ]
         , viewFilterHeader Shared.blueDark "Mode"
         , div []
             [ viewFilter FilterCoopCampaign Shared.blueLight "Co-op Campaign" model.mustHaveCoopCampaign
@@ -472,33 +473,31 @@ viewSearch search =
         [ input
             [ Attr.id "search"
             , type_ "search"
-            , placeholder "Press any key to search"
+            , placeholder "Search"
             , Event.onFocus (SearchFocused True)
             , Event.onBlur (SearchFocused False)
             , Event.onInput Search
             , Attr.value search
             , css
-                [ padding (px 15)
-                , paddingLeft (px 45)
+                [ padding4 (px 17) (px 17) (px 15) (px 45)
                 , color black
                 , fontSize inherit
                 , width (ch 28)
                 , backgroundColor (hex "ececeb")
                 , border zero
                 , borderRadius (px 8)
-                , pseudoElement "placeholder"
-                    [ color (hex "a2a2a2") ]
+                , pseudoElement "placeholder" [ color (hex "a2a2a2") ]
                 ]
             ]
             []
 
-        -- Icon
+        -- Search Icon
         , div
             [ css
                 [ position absolute
                 , top (pct 50)
                 , left (px 15)
-                , transform (translateY (pct -50))
+                , transforms [ translateY (pct -50), translateY (px 1) ]
                 , pointerEvents none
                 ]
             ]
