@@ -216,6 +216,7 @@ viewInfo game genres modes stores =
                             [ css [ display block, color Shared.magentaLight, textDecoration none, hover [ textDecoration underline ] ]
                             , Attr.href (Url.toString url)
                             , Attr.target "_blank"
+                            , Attr.rel "noreferrer"
                             ]
                             [ Html.text text
                             , Html.span [ css [ marginLeft (px 3) ] ] [ viewArrowUpRight 9 9 Shared.magentaLight ]
