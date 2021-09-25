@@ -1,7 +1,9 @@
 elm-live^
     src/Main.elm^
-    --proxy-host http://127.0.0.1:9090/api^
-    --proxy-prefix /api^
+    --start-page index.html^
+    --proxy-host http://127.0.0.1:39090/api/^
+    --proxy-prefix /api/^
     --pushstate^
     --^
+    --output=assets/elm.js^
     --debug^

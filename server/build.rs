@@ -1,35 +1,49 @@
-use std::env;
+use std::ffi::OsStr;
+use std::fmt::Write;
 use std::io::ErrorKind::NotFound;
 use std::path::PathBuf;
 use std::process::{exit, Command};
+use std::{env, fs};
 use walkdir::WalkDir;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let is_release = match env::var("PROFILE")?.as_str() {
-        "debug" => false,
-        "release" => true,
-        profile => panic!("unknown profile: {}", profile),
-    };
+    let client_path = PathBuf::from("../client-web");
 
-    for entry in WalkDir::new("../client-web") {
+    //
+    // Tell cargo that if any web files change, the build needs to be rerun.
+    //
+
+    for entry in WalkDir::new(&client_path) {
         let entry = match entry {
             Ok(entry) => entry,
             Err(_) => continue,
         };
         let path = entry.path();
         let extension = match path.extension() {
-            Some(extension) => extension,
+            Some(extension) => extension.to_ascii_lowercase(),
             None => continue,
         };
-        if extension == "elm" || extension == "json" {
+        let should_check = ["elm", "json", "js", "svg", "css", "txt", "png", "ico"]
+            .iter()
+            .any(|&e| e == extension);
+        if should_check {
             if let Some(path) = path.to_str() {
                 println!("cargo:rerun-if-changed={}", path);
             }
         }
     }
 
+    //
+    // Build the Elm application.
+    //
+
+    let is_release = match env::var("PROFILE")?.as_str() {
+        "debug" => false,
+        "release" => true,
+        profile => panic!("unknown profile: {}", profile),
+    };
     let elm_output = Command::new(ELM)
-        .current_dir("../client-web")
+        .current_dir(&client_path)
         .args(&[
             "make",
             "src/Main.elm",
@@ -44,18 +58,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => e,
         })?;
-
     if !elm_output.status.success() {
         eprintln!("{}", String::from_utf8_lossy(&elm_output.stdout));
         eprintln!("{}", String::from_utf8_lossy(&elm_output.stderr));
         panic!("Elm failed to compile. Fix the errors and try rebuilding.");
     }
-
     if is_release {
         // Additional javascript minification. This follows the advice given here:
         // https://guide.elm-lang.org/optimization/asset_size.html
         Command::new(UGLIFYJS)
-            .current_dir("../client-web")
+            .current_dir(&client_path)
             .args(&["elm.js", "--compress", r##"'pure_funcs="F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9",pure_getters,keep_fargs=false,unsafe_comps,unsafe'"##, "--output=elm.js"])
             .output()
             .map_err(|e| {
@@ -68,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             })?;
         Command::new(UGLIFYJS)
-            .current_dir("../client-web")
+            .current_dir(&client_path)
             .args(&["elm.js", "--mangle", "--output=elm.js"])
             .output()
             .map_err(|e| match e.kind() {
@@ -80,81 +92,72 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })?;
     }
 
-    // Insert the compiled elm app into an html file ready to be served.
-    let elm = std::fs::read_to_string("../client-web/elm.js")?;
-    let index = format!(
-        r##"
-        <!DOCTYPE HTML>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Grifter</title>
-            <style>body {{ padding: 0; margin: 0; background-color: #fcfbf9; }}</style>
+    //
+    // Copy all static assets to the output dir.
+    //
 
-            <link rel="preload" href="https://fonts.gstatic.com/s/inter/v3/UcC73FwrK3iLTeHuS_fvQtMwCp50KnMa1ZL7.woff2" as="font" type="font/woff2" crossorigin> 
-            <style>
-            @font-face {{
-                font-family: 'Fredoka One';
-                font-style: normal;
-                font-weight: 400;
-                font-display: swap;
-                src: url(https://fonts.gstatic.com/s/fredokaone/v8/k3kUo8kEI-tA1RRcTZGmTlHGCac.woff2) format('woff2');
-                unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-            }}
-            @font-face {{
-                font-family: 'Inter';
-                font-style: normal;
-                font-weight: 300;
-                font-display: swap;
-                src: url(https://fonts.gstatic.com/s/inter/v3/UcC73FwrK3iLTeHuS_fvQtMwCp50KnMa1ZL7.woff2) format('woff2');
-                unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-            }}
-            @font-face {{
-                font-family: 'Inter';
-                font-style: normal;
-                font-weight: 400;
-                font-display: swap;
-                src: url(https://fonts.gstatic.com/s/inter/v3/UcC73FwrK3iLTeHuS_fvQtMwCp50KnMa1ZL7.woff2) format('woff2');
-                unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-            }}
-            @font-face {{
-                font-family: 'Inter';
-                font-style: normal;
-                font-weight: 500;
-                font-display: swap;
-                src: url(https://fonts.gstatic.com/s/inter/v3/UcC73FwrK3iLTeHuS_fvQtMwCp50KnMa1ZL7.woff2) format('woff2');
-                unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-            }}
-            @font-face {{
-                font-family: 'Inter';
-                font-style: normal;
-                font-weight: 600;
-                font-display: swap;
-                src: url(https://fonts.gstatic.com/s/inter/v3/UcC73FwrK3iLTeHuS_fvQtMwCp50KnMa1ZL7.woff2) format('woff2');
-                unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-            }}
-            @font-face {{
-                font-family: 'Inter';
-                font-style: normal;
-                font-weight: 700;
-                font-display: swap;
-                src: url(https://fonts.gstatic.com/s/inter/v3/UcC73FwrK3iLTeHuS_fvQtMwCp50KnMa1ZL7.woff2) format('woff2');
-                unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-            }}
-            </style>
-        </head>
-        <body>
-            <div id="main"></div>
-            <script>{}</script>
-            <script>var app = Elm.Main.init({{ node: document.getElementById("main") }});</script>
-        </body>"##,
-        elm
-    );
-    let out_dir = PathBuf::from(env::var("OUT_DIR")?);
-    std::fs::write(out_dir.join("index.html"), index)?;
+    let out_dir = PathBuf::from(env::var("OUT_DIR")?).join("client-web");
+    let options = fs_extra::dir::CopyOptions {
+        overwrite: true,
+        skip_exist: false,
+        buffer_size: 64_000,
+        copy_inside: true,
+        content_only: true,
+        depth: 0,
+    };
+    fs_extra::dir::copy(client_path.join("assets"), out_dir.join("assets"), &options)?;
+    fs::copy(client_path.join("index.html"), out_dir.join("index.html"))?;
+    fs::copy(client_path.join("robots.txt"), out_dir.join("robots.txt"))?;
+    fs::copy(client_path.join("favicon.ico"), out_dir.join("favicon.ico"))?;
+    // TODO: if the program throws an exception here, elm.js is left in client_web
 
-    // Cleanup
-    std::fs::remove_file("../client-web/elm.js")?;
+    // Copy elm app
+    let elm_path = client_path.join("elm.js");
+    fs::copy(&elm_path, out_dir.join("assets/elm.js"))?;
+    fs::remove_file(&elm_path)?;
+
+    //
+    // Build client_web.rs
+    //
+
+    let assets: Vec<PathBuf> = WalkDir::new(&out_dir)
+        .into_iter()
+        .filter_map(|entry| {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(_) => return None,
+            };
+            let path = entry.path();
+            if path.is_dir() {
+                return None;
+            }
+            Some(path.to_path_buf())
+        })
+        .collect();
+
+    let mut client_web = String::new();
+    writeln!(
+        &mut client_web,
+        "pub const CLIENT_WEB: [(&str, &[u8]); {}] = [",
+        assets.len()
+    )?;
+    for asset in assets.iter() {
+        let url = PathBuf::from("/")
+            .join(asset.strip_prefix(&out_dir)?)
+            .to_str()
+            .unwrap()
+            .chars()
+            .map(|c| if c == '\\' { '/' } else { c })
+            .collect::<String>();
+
+        writeln!(
+            &mut client_web,
+            r##"    ("{url}", include_bytes!(concat!(env!("OUT_DIR"), "/client-web{url}"))),"##,
+            url = url,
+        )?;
+    }
+    writeln!(&mut client_web, "];")?;
+    fs::write("src/client_web.rs", client_web)?;
 
     Ok(())
 }

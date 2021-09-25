@@ -6,6 +6,7 @@ use config::Config;
 use std::fs;
 
 mod api;
+mod client_web;
 mod config;
 mod game;
 mod igdb;

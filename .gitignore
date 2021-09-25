@@ -1,4 +1,7 @@
 /client-web/elm-stuff
+/client-web/assets/elm.js
+
 /server/target
 /server/grifter.toml
 /server/cache
+/server/src/client_web.rs

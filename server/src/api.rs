@@ -1,3 +1,4 @@
+use crate::client_web;
 use crate::config::Config;
 use crate::game::Game;
 use crate::igdb;
@@ -5,8 +6,10 @@ use crate::twitch;
 use crossbeam_channel::{bounded, Receiver, Sender};
 use flate2::write::GzEncoder;
 use image::GenericImageView;
-use rouille::{router, Request, Response, Server};
+use rouille::{extension_to_mime, router, Request, Response, Server};
 use serde::Serialize;
+use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -21,7 +24,13 @@ pub fn gzip(bytes: &[u8]) -> io::Result<Vec<u8>> {
 struct Model {
     catalog: Catalog,
     catalog_gz: Vec<u8>,
-    index_gz: Vec<u8>,
+    assets_gz: HashMap<&'static str, GzippedAsset>,
+}
+
+#[derive(Clone)]
+struct GzippedAsset {
+    mime: &'static str,
+    bytes: Vec<u8>,
 }
 
 #[derive(Clone, Serialize)]
@@ -60,6 +69,21 @@ pub fn start(
     themes.sort_by(|a, b| a.name.cmp(&b.name));
 
     let model = {
+        let mut assets_gz = HashMap::new();
+        for (url, uncompressed) in client_web::CLIENT_WEB {
+            let compressed = gzip(uncompressed).unwrap();
+            let mime = PathBuf::from(url)
+                .extension()
+                .and_then(OsStr::to_str)
+                .map(extension_to_mime)
+                .unwrap_or("application/octet-stream");
+            let asset = GzippedAsset {
+                mime,
+                bytes: compressed,
+            };
+            assets_gz.insert(url, asset);
+        }
+
         let catalog = Catalog {
             games,
             genres,
@@ -68,18 +92,16 @@ pub fn start(
         let catalog_json = serde_json::to_vec(&catalog).unwrap();
         let catalog_gz = gzip(&catalog_json).unwrap();
 
-        let index_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/index.html"));
-        let index_gz = gzip(index_bytes).unwrap();
         Model {
             catalog,
             catalog_gz,
-            index_gz,
+            assets_gz,
         }
     };
 
     if config.https {
         // Since we're going to start an https server, we'll want to redirect all http traffic
-        // to the https. So we'll start an http server whose sole purpose is to redirect to the
+        // to https. So we'll start an http server whose sole purpose is to redirect to the
         // https server.
         let http_port = config.http_port;
         let https_port = config.https_port;
@@ -117,11 +139,15 @@ pub fn start(
             request.raw_url()
         );
 
+        match model.assets_gz.get(request.raw_url()) {
+            Some(asset) => return assets(asset),
+            None => {}
+        }
+
         router!(request,
             (GET) ["/api/catalog"] => {catalog(&model, request)},
             (GET) ["/api/download/{slug}", slug: String] => {download(&model, request, &slug)},
             (GET) ["/api/image/{id}", id: String] => {image(&model, request, &id)},
-            (GET) ["/favicon.ico"] => {favicon()},
             (GET) ["/"] => {index(&model, request)},
             _ => index(&model, request),
         )
@@ -159,7 +185,25 @@ pub fn start(
 }
 
 fn index(model: &Model, _: &Request) -> Response {
-    Response::from_data("text/html", model.index_gz.clone())
+    let index = match model.assets_gz.get("/index.html") {
+        Some(index) => index,
+        None => return Response::empty_404(),
+    };
+
+    Response::from_data(index.mime, index.bytes.clone())
+        .with_unique_header(
+            "content-security-policy",
+            "default-src 'none'; font-src https://fonts.gstatic.com; img-src 'self' https://i.ytimg.com; connect-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; frame-src https://www.youtube-nocookie.com/;",
+        )
+        .with_unique_header("referrer-policy", "no-referrer")
+        .with_unique_header("x-content-type-options", "nosniff")
+        .with_unique_header("x-frame-options", "deny")
+        .with_unique_header("x-xss-protection", "1; mode=block")
+        .with_unique_header("content-encoding", "gzip")
+}
+
+fn assets(asset: &GzippedAsset) -> Response {
+    Response::from_data(asset.mime, asset.bytes.clone())
         .with_unique_header("content-encoding", "gzip")
 }
 
@@ -191,13 +235,8 @@ fn download(model: &Model, _: &Request, slug: &str) -> Response {
     )
 }
 
-fn favicon() -> Response {
-    let icon = include_bytes!("../favicon.ico");
-    Response::from_data("image/x-icon", &icon[..])
-}
-
 fn catalog(model: &Model, _: &Request) -> Response {
-    Response::from_data("application/json", model.catalog_gz.clone())
+    Response::from_data(extension_to_mime("json"), model.catalog_gz.clone())
         .with_unique_header("content-encoding", "gzip")
 }
 
