@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(extension) => extension.to_ascii_lowercase(),
             None => continue,
         };
-        let should_check = ["elm", "json", "js", "svg", "css", "txt", "png", "ico"]
+        let should_check = ["elm", "json", "js", "svg", "css", "txt", "png", "ico", "html"]
             .iter()
             .any(|&e| e == extension);
         if should_check {

@@ -204,12 +204,12 @@ fn index(model: &Model, _: &Request) -> Response {
         "form-action 'none'",
     ];
     Response::from_data(index.mime, index.bytes.clone())
+        .with_unique_header("content-encoding", "gzip")
         .with_unique_header("content-security-policy", csp.join("; "))
         .with_unique_header("referrer-policy", "no-referrer")
         .with_unique_header("x-content-type-options", "nosniff")
         .with_unique_header("x-frame-options", "deny")
         .with_unique_header("x-xss-protection", "1; mode=block")
-        .with_unique_header("content-encoding", "gzip")
 }
 
 fn assets(asset: &GzippedAsset) -> Response {
