@@ -131,26 +131,37 @@ pub fn start(
     }
 
     let is_https_enabled = config.https;
+
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let requests = AtomicUsize::new(0);
     let handler = move |request: &Request| -> Response {
+        let id = requests.fetch_add(1, Ordering::Relaxed);
         println!(
-            "{} to {}:{}",
-            request.remote_addr().ip(),
-            if is_https_enabled { "https" } else { "http" },
-            request.raw_url()
+            "[Request  #{id}] {origin} to {protocol}://{host}{path}",
+            id = id,
+            origin = request.remote_addr().ip(),
+            host = request.header("host").unwrap_or(""),
+            protocol = if is_https_enabled { "https" } else { "http" },
+            path = request.raw_url()
         );
 
-        match model.assets_gz.get(request.raw_url()) {
-            Some(asset) => return assets(asset),
-            None => {}
-        }
+        let _handler = |request: &Request| -> Response {
+            match model.assets_gz.get(request.raw_url()) {
+                Some(asset) => return assets(asset),
+                None => {}
+            }
 
-        router!(request,
-            (GET) ["/api/catalog"] => {catalog(&model, request)},
-            (GET) ["/api/download/{slug}", slug: String] => {download(&model, request, &slug)},
-            (GET) ["/api/image/{id}", id: String] => {image(&model, request, &id)},
-            (GET) ["/"] => {index(&model, request)},
-            _ => index(&model, request),
-        )
+            router!(request,
+                (GET) ["/api/catalog"] => {catalog(&model, request)},
+                (GET) ["/api/download/{slug}", slug: String] => {download(&model, request, &slug)},
+                (GET) ["/api/image/{id}", id: String] => {image(&model, request, &id)},
+                (GET) ["/"] => {index(&model, request)},
+                _ => index(&model, request),
+            )
+        };
+        let response = _handler(request);
+        println!("[Response #{id}] {status}", id = id, status = response.status_code);
+        response
     };
 
     if config.https {
