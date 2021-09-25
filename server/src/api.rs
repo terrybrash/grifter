@@ -190,11 +190,20 @@ fn index(model: &Model, _: &Request) -> Response {
         None => return Response::empty_404(),
     };
 
+    let csp = [
+        "default-src 'none'",
+        "font-src https://fonts.gstatic.com",
+        "img-src 'self' https://i.ytimg.com",
+        "connect-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "frame-ancestors 'none'",
+        "frame-src https://www.youtube-nocookie.com/",
+        "base-uri 'none'",
+        "require-trusted-types-for 'script'",
+    ];
     Response::from_data(index.mime, index.bytes.clone())
-        .with_unique_header(
-            "content-security-policy",
-            "default-src 'none'; font-src https://fonts.gstatic.com; img-src 'self' https://i.ytimg.com; connect-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; frame-src https://www.youtube-nocookie.com/;",
-        )
+        .with_unique_header("content-security-policy", csp.join("; "))
         .with_unique_header("referrer-policy", "no-referrer")
         .with_unique_header("x-content-type-options", "nosniff")
         .with_unique_header("x-frame-options", "deny")
