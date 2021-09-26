@@ -479,7 +479,7 @@ viewSearch search =
             , Event.onInput Search
             , Attr.value search
             , css
-                [ padding4 (px 17) (px 17) (px 15) (px 45)
+                [ padding4 (px 17) (px 17) (px 15) (px 43)
                 , color black
                 , fontSize inherit
                 , width (ch 28)
