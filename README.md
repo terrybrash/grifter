@@ -14,3 +14,7 @@ Prerequisites:
 npm install --global elm uglify-js
 cargo build
 ```
+
+## Credits
+
+Favicon by [VectorPixelStar](https://twitter.com/vectorpixelstar)
