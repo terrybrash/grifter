@@ -363,7 +363,7 @@ viewSidebar catalog model =
     in
     div []
         [ viewSearch model.search
-        , div [ css [ fontSize (em 0.8), color (hex "a2a2a2"), marginTop (em 1) ] ] [ text "Tip: start typing anytime to search." ]
+        , div [ css [ fontSize (em 0.8), color (hex "a2a2a2"), marginTop (em 1) ] ] [ text "Tip: search by typing at any time." ]
         , viewFilterHeader Shared.blueDark "Mode"
         , div []
             [ viewFilter FilterCoopCampaign Shared.blueLight "Co-op Campaign" model.mustHaveCoopCampaign
