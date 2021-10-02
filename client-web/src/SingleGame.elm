@@ -2,9 +2,8 @@ module SingleGame exposing (Msg(..), view)
 
 import Backend
 import Css exposing (..)
-import Css.Global
-import Html.Styled as Html exposing (Html)
-import Html.Styled.Attributes as Attr exposing (css)
+import Html.Styled as Html exposing (Html, a, div, h1, iframe, img, main_, p, span, text)
+import Html.Styled.Attributes as Attr exposing (css, id)
 import Html.Styled.Events as Event
 import Set
 import Shared exposing (inter, rgbaFromColor)
@@ -105,56 +104,62 @@ view catalog game =
             , boxSizing borderBox
             ]
     in
-    Html.div [ css style ]
-        [ Css.Global.global [ Css.Global.body [ backgroundColor Shared.yellow100 ] ]
-        , viewHeader game
-        , viewDownload game
-        , viewInfo game genres modes stores
-        , viewMedia game
-        ]
-
-
-viewHeader : Backend.Game -> Html Msg
-viewHeader game =
-    Html.div
-        [ css
-            [ property "grid-row" "1"
-            , property "grid-column-start" "1"
-            , property "grid-column-end" "3"
-            , displayFlex
-            , alignItems center
-            , fontSize (em 1.7)
-            , fontWeight (int 600)
-            ]
-        ]
-        [ Html.div
-            [ css
-                [ padding2 (px 5) (px 10)
-                , borderRadius (px 4)
-                , marginRight (px 10)
-                , marginLeft (px -10) -- align the arrow with the cover art
-                , hover [ backgroundColor (rgb 237 237 237) ]
-                , cursor pointer
+    main_ [ css style ]
+        [ div
+            [ id "header"
+            , css
+                [ property "grid-row" "1"
+                , property "grid-column-start" "1"
+                , property "grid-column-end" "3"
+                , displayFlex
+                , alignItems baseline
                 ]
-            , Event.onClick GoBack
             ]
-            [ viewBackArrow 20 20 "black" ]
-        , Html.h1 [] [ Html.text game.name ]
+            [ viewAllGames
+            , h1 [ css [ fontSize (em 1.7), fontWeight (int 600), flexGrow (num 1) ] ] [ text game.name ]
+            , div [ css [ flexShrink (num 0) ] ] [ viewDownload game ]
+            ]
+        , div [ id "info", css [ property "grid-row" "2", lineHeight (num 1.7) ] ]
+            [ viewCover game
+            , viewTags genres modes stores
+            , viewSummary game
+            ]
+        , div
+            [ id "media"
+            , css
+                [ property "display" "grid"
+                , property "grid-row" "2"
+                , property "grid-template-columns" "repeat(2, 1fr)"
+                , property "grid-gap" "10px"
+                , property "height" "min-content"
+                ]
+            ]
+            (List.map viewVideo game.videos ++ List.map (viewScreenshot game) game.screenshots)
         ]
+
+
+viewAllGames : Html Msg
+viewAllGames =
+    div
+        [ css
+            [ padding2 (px 7) (px 10)
+            , borderRadius (px 4)
+            , marginRight (px 10)
+            , marginLeft (px -10) -- align the arrow with the cover art
+            , hover [ backgroundColor (rgb 237 237 237) ]
+            , cursor pointer
+            ]
+        , Event.onClick GoBack
+        , Attr.title "Browse games"
+        ]
+        [ viewBackArrow 20 20 "black" ]
 
 
 viewDownload : Backend.Game -> Html msg
 viewDownload game =
-    Html.div
-        [ css
-            [ property "grid-column" "2"
-            , property "grid-row" "1"
-            , displayFlex
-            , alignItems center
-            , flexDirection rowReverse
-            ]
-        ]
-        [ Html.a
+    div [ id "download", css [ displayFlex, alignItems baseline ] ]
+        [ span [ css [ marginLeft (px 4) ] ] [ text (formatBytes game.sizeBytes) ]
+        , a
             [ Attr.href ("/api/download/" ++ game.slug)
             , Attr.download ""
             , css
@@ -170,10 +175,9 @@ viewDownload game =
                 , marginLeft (px 20)
                 ]
             ]
-            [ Html.div [ css [ marginRight (ch 0.4), lineHeight zero ] ] [ viewWindowsLogo [ SvgAttr.height "1em" ] ]
-            , Html.text "Download"
+            [ div [ css [ marginRight (ch 0.4), lineHeight zero ] ] [ viewWindowsLogo [ SvgAttr.height "1em" ] ]
+            , text "Download"
             ]
-        , Html.span [ css [ marginLeft (px 4) ] ] [ Html.text (formatBytes game.sizeBytes) ]
         ]
 
 
@@ -190,73 +194,62 @@ formatBytes bytes =
         String.fromInt (Basics.round (toFloat bytes / 1000000)) ++ " MB"
 
 
-viewInfo : Backend.Game -> List String -> List String -> List ( String, Url ) -> Html msg
-viewInfo game genres modes stores =
-    Html.div [ css [ property "grid-row" "2", lineHeight (num 1.7) ] ]
-        [ -- Cover art
-          case game.cover of
-            Just cover ->
-                Html.img
-                    [ Attr.src ("/api/image/" ++ cover.id ++ "?size=Original")
-                    , Attr.width cover.width
-                    , Attr.height cover.height
-                    , css [ display block, width (pct 100), height auto, marginBottom (em 1) ]
-                    ]
-                    []
+viewCover : Backend.Game -> Html msg
+viewCover game =
+    case game.cover of
+        Just cover ->
+            img
+                [ id "cover"
+                , Attr.src ("/api/image/" ++ cover.id ++ "?size=Original")
+                , Attr.width cover.width
+                , Attr.height cover.height
+                , css [ display block, width (pct 100), height auto, marginBottom (em 1) ]
+                , Attr.alt (game.name ++ " cover art")
+                ]
+                []
+
+        Nothing ->
+            text ""
+
+
+viewTags : List String -> List String -> List ( String, Url ) -> Html msg
+viewTags genres modes stores =
+    div [ id "tags", css [ marginBottom (em 1) ] ]
+        [ div [] (List.map (\mode -> div [ css [ color Shared.blueLight ] ] [ text mode ]) modes)
+        , div [] (List.map (\genre -> div [ css [ color Shared.greenLight ] ] [ text genre ]) genres)
+        , div []
+            (List.map
+                (\( store, url ) ->
+                    a
+                        [ css [ display block, color Shared.magentaLight, textDecoration none, hover [ textDecoration underline ] ]
+                        , Attr.href (Url.toString url)
+                        , Attr.target "_blank"
+                        , Attr.rel "noreferrer"
+                        ]
+                        [ text store
+                        , span [ css [ marginLeft (px 3) ] ] [ viewArrowUpRight 9 9 Shared.magentaLight ]
+                        ]
+                )
+                stores
+            )
+        ]
+
+
+viewSummary : Backend.Game -> Html msg
+viewSummary game =
+    p [ id "summary", css [ color (hsl 0 0 0.32), marginBottom (em 1), fontWeight (int 300) ] ]
+        [ case game.summary of
+            Just summary ->
+                text summary
 
             Nothing ->
-                Html.text ""
-        , Html.div [ css [ marginBottom (em 1) ] ]
-            [ Html.div [] (List.map (\text -> Html.div [ css [ color Shared.blueLight ] ] [ Html.text text ]) modes)
-            , Html.div [] (List.map (\text -> Html.div [ css [ color Shared.greenLight ] ] [ Html.text text ]) genres)
-            , Html.div []
-                (List.map
-                    (\( text, url ) ->
-                        Html.a
-                            [ css [ display block, color Shared.magentaLight, textDecoration none, hover [ textDecoration underline ] ]
-                            , Attr.href (Url.toString url)
-                            , Attr.target "_blank"
-                            , Attr.rel "noreferrer"
-                            ]
-                            [ Html.text text
-                            , Html.span [ css [ marginLeft (px 3) ] ] [ viewArrowUpRight 9 9 Shared.magentaLight ]
-                            ]
-                    )
-                    stores
-                )
-            ]
-
-        -- Summary
-        , Html.p [ css [ color (hsl 0 0 0.32), marginBottom (em 1), fontWeight (int 300) ] ]
-            [ case game.summary of
-                Just summary ->
-                    Html.text summary
-
-                Nothing ->
-                    Html.text "No summary!"
-            ]
+                text ""
         ]
-
-
-viewMedia : Backend.Game -> Html msg
-viewMedia game =
-    Html.div
-        [ css
-            [ property "display" "grid"
-            , property "grid-row" "2"
-            , property "grid-template-columns" "repeat(2, 1fr)"
-            , property "grid-gap" "10px"
-            , property "height" "min-content"
-            ]
-        ]
-        (List.map viewVideo game.videos
-            ++ List.map (viewScreenshot game) game.screenshots
-        )
 
 
 viewScreenshot : Backend.Game -> Backend.Image -> Html msg
 viewScreenshot game screenshot =
-    Html.div
+    div
         [ css
             [ overflow hidden
             , borderRadius (px 3)
@@ -264,7 +257,7 @@ viewScreenshot game screenshot =
             , alignItems center
             ]
         ]
-        [ Html.img
+        [ img
             [ Attr.src ("/api/image/" ++ screenshot.id ++ "?size=Original")
             , Attr.width screenshot.width
             , Attr.height screenshot.height
@@ -286,7 +279,7 @@ viewScreenshot game screenshot =
 
 viewVideo : String -> Html msg
 viewVideo video =
-    Html.div
+    div
         [ css
             [ paddingTop (pct (9 / 16 * 100))
             , position relative
@@ -294,7 +287,7 @@ viewVideo video =
             , borderRadius (px 3)
             ]
         ]
-        [ Html.iframe
+        [ iframe
             [ Attr.src video
             , Attr.attribute "frameborder" "0"
             , Attr.attribute "allowfullscreen" ""

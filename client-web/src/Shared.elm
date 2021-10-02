@@ -12,12 +12,12 @@ module Shared exposing
     , magentaLight
     , onKeyDown
     , pageWidth
+    , rgbaFromColor
     , spacing
     , userSelectNone
     , white
     , yellow100
     , yellow200
-    , rgbaFromColor
     )
 
 import Browser.Events

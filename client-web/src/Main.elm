@@ -125,7 +125,7 @@ update msg model =
             ( Loaded { loaded | allGames = newModel }, Cmd.map MsgAllGames cmd )
 
         ( MsgSingleGame GoBack, Loaded loaded ) ->
-            ( model, Browser.Navigation.back loaded.key 1 )
+            ( model, Browser.Navigation.replaceUrl loaded.key "/games" )
 
         ( ClickedLink (Browser.Internal url), Loaded loaded ) ->
             ( model, Browser.Navigation.pushUrl loaded.key (Url.toString url) )

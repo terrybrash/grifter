@@ -5,8 +5,8 @@ import Browser.Dom
 import Css exposing (..)
 import Css.Global
 import Css.Transitions as Transitions
-import Html.Styled exposing (Html, a, button, div, h1, h3, img, input, label, span, text)
-import Html.Styled.Attributes as Attr exposing (class, css, href, placeholder, src, type_)
+import Html.Styled exposing (Html, a, button, div, h1, h3, img, input, label, main_, span, text)
+import Html.Styled.Attributes as Attr exposing (class, css, href, id, placeholder, src, type_)
 import Html.Styled.Events as Event
 import Html.Styled.Keyed as Keyed
 import Pagination exposing (Pagination)
@@ -19,7 +19,7 @@ import Url.Builder exposing (Root(..))
 
 
 type Msg
-    = NoOp
+    = ChangeViewport
     | NextPage (Pagination (List Game))
     | PrevPage (Pagination (List Game))
     | Search String
@@ -100,10 +100,10 @@ update : Backend.Catalog -> Msg -> Model -> ( Model, Cmd Msg )
 update catalog msg model =
     case msg of
         NextPage next ->
-            ( { model | games = Just next }, Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0) )
+            ( { model | games = Just next }, Task.perform (always ChangeViewport) (Browser.Dom.setViewport 0 0) )
 
         PrevPage prev ->
-            ( { model | games = Just prev }, Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0) )
+            ( { model | games = Just prev }, Task.perform (always ChangeViewport) (Browser.Dom.setViewport 0 0) )
 
         Search search ->
             ( filterGames catalog { model | search = search, normalizedSearch = normalizeSearch search }
@@ -153,7 +153,7 @@ update catalog msg model =
 
         KeyDown { key, ctrl } ->
             if not ctrl && not model.isSearchFocused && isSingleAlphaNum key then
-                ( filterGames catalog { model | search = key }, Task.attempt (\_ -> NoOp) (Browser.Dom.focus "search") )
+                ( filterGames catalog { model | search = key }, Task.attempt (always ChangeViewport) (Browser.Dom.focus "search") )
 
             else
                 ( model, Cmd.none )
@@ -161,7 +161,7 @@ update catalog msg model =
         SearchFocused isFocused ->
             ( { model | isSearchFocused = isFocused }, Cmd.none )
 
-        NoOp ->
+        ChangeViewport ->
             ( model, Cmd.none )
 
 
@@ -253,7 +253,7 @@ filterGames catalog model =
 
 view : Backend.Catalog -> Model -> Html Msg
 view catalog model =
-    div
+    main_
         [ css
             [ property "display" "grid"
             , property "grid-template-columns" "auto 1fr"
@@ -265,16 +265,16 @@ view catalog model =
             , marginRight auto
             ]
         ]
-        [ Css.Global.global [ Css.Global.body [ backgroundColor Shared.yellow100, overflowY scroll ] ]
-        , div
-            [ css
+        [ div
+            [ id "sidebar"
+            , css
                 [ padding (px 30)
                 , paddingRight (px 15)
                 , property "grid-column" "1"
                 , hover [ Css.Global.descendants [ Css.Global.class "checkbox" [ opacity (num 1.0) ] ] ]
                 ]
             ]
-            [ viewSidebar catalog model ]
+            (viewSidebar catalog model)
         , div
             [ css
                 [ padding (px 30)
@@ -351,7 +351,7 @@ viewPaginator games =
 -- SIDEBAR
 
 
-viewSidebar : Backend.Catalog -> Model -> Html Msg
+viewSidebar : Backend.Catalog -> Model -> List (Html Msg)
 viewSidebar catalog model =
     let
         viewGenreFilter genre =
@@ -361,29 +361,28 @@ viewSidebar catalog model =
             in
             viewFilter (\f -> FilterGenre ( genre.id, f )) Shared.greenLight genre.name isGenreFiltered
     in
-    div []
-        [ viewSearch model.search
-        , div [ css [ fontSize (em 0.8), color (hex "a2a2a2"), marginTop (em 1) ] ] [ text "Tip: search by typing at any time." ]
-        , viewFilterHeader Shared.blueDark "Mode"
-        , div []
-            [ viewFilter FilterCoopCampaign Shared.blueLight "Co-op Campaign" model.mustHaveCoopCampaign
-            , viewFilter FilterOfflineCoop Shared.blueLight "Offline Co-op" model.mustHaveOfflineCoop
-            , viewFilter FilterOfflinePvp Shared.blueLight "Offline PvP" model.mustHaveOfflinePvp
-            , viewFilter FilterOnlineCoop Shared.blueLight "Online Co-op" model.mustHaveOnlineCoop
-            , viewFilter FilterOnlinePvp Shared.blueLight "Online PvP" model.mustHaveOnlinePvp
-            , viewFilter FilterSinglePlayer Shared.blueLight "Single Player" model.mustHaveSinglePlayer
-            ]
-        , viewFilterHeader Shared.greenDark "Genre"
-        , div []
-            (List.map viewGenreFilter catalog.genres)
-        , viewFilterHeader Shared.magentaDark "Store"
-        , div []
-            [ viewFilter FilterSteam Shared.magentaLight "Steam" model.mustHaveSteam
-            , viewFilter FilterItch Shared.magentaLight "Itch.io" model.mustHaveItch
-            , viewFilter FilterGog Shared.magentaLight "GOG" model.mustHaveGog
-            , viewFilter FilterEpicGames Shared.magentaLight "Epic Games" model.mustHaveEpicGames
-            ]
+    [ viewSearch model.search
+    , div [ css [ fontSize (em 0.8), color (hex "a2a2a2"), marginTop (em 1) ] ] [ text "Tip: search by typing at any time." ]
+    , viewFilterHeader Shared.blueDark "Mode"
+    , div []
+        [ viewFilter FilterCoopCampaign Shared.blueLight "Co-op Campaign" model.mustHaveCoopCampaign
+        , viewFilter FilterOfflineCoop Shared.blueLight "Offline Co-op" model.mustHaveOfflineCoop
+        , viewFilter FilterOfflinePvp Shared.blueLight "Offline PvP" model.mustHaveOfflinePvp
+        , viewFilter FilterOnlineCoop Shared.blueLight "Online Co-op" model.mustHaveOnlineCoop
+        , viewFilter FilterOnlinePvp Shared.blueLight "Online PvP" model.mustHaveOnlinePvp
+        , viewFilter FilterSinglePlayer Shared.blueLight "Single Player" model.mustHaveSinglePlayer
         ]
+    , viewFilterHeader Shared.greenDark "Genre"
+    , div []
+        (List.map viewGenreFilter catalog.genres)
+    , viewFilterHeader Shared.magentaDark "Store"
+    , div []
+        [ viewFilter FilterSteam Shared.magentaLight "Steam" model.mustHaveSteam
+        , viewFilter FilterItch Shared.magentaLight "Itch.io" model.mustHaveItch
+        , viewFilter FilterGog Shared.magentaLight "GOG" model.mustHaveGog
+        , viewFilter FilterEpicGames Shared.magentaLight "Epic Games" model.mustHaveEpicGames
+        ]
+    ]
 
 
 viewFilterHeader : Color -> String -> Html msg
@@ -650,20 +649,6 @@ roundedSmall =
 gamesPerPage : Int
 gamesPerPage =
     10
-
-
-
--- SVG
--- viewGamepadIcon : Html msg
--- viewGamepadIcon =
---     S.svg
---         [ Sa.viewBox "0 0 399 238" ]
---         [ S.rect [ Sa.fill "none", Sa.stroke "#000", Sa.strokeWidth "19", Sa.width "380", Sa.height "219", Sa.x "10", Sa.y "10", Sa.rx "109.5" ] []
---         , S.path [ Sa.fill "none", Sa.stroke "#000", Sa.strokeLinecap "round", Sa.strokeWidth "18", Sa.d "M120 79v81" ] []
---         , S.path [ Sa.fill "none", Sa.stroke "#000", Sa.strokeLinecap "round", Sa.strokeWidth "18", Sa.d "M79 119h82" ] []
---         , S.circle [ Sa.cx "14", Sa.cy "14", Sa.r "14", Sa.transform "translate(295 75)" ] []
---         , S.circle [ Sa.cx "14", Sa.cy "14", Sa.r "14", Sa.transform "translate(255 135)" ] []
---         ]
 
 
 viewCheckbox : Color -> Bool -> Html msg
