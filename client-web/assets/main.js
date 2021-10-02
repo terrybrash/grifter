@@ -1,2 +1,1 @@
-Elm.Main.init({ node: document.getElementById("main") });
-
+Elm.Main.init({ node: document.body });
