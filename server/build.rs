@@ -1,4 +1,3 @@
-use std::ffi::OsStr;
 use std::fmt::Write;
 use std::io::ErrorKind::NotFound;
 use std::path::PathBuf;

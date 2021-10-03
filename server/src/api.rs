@@ -23,7 +23,7 @@ pub fn gzip(bytes: &[u8]) -> io::Result<Vec<u8>> {
 #[derive(Clone)]
 struct Model {
     catalog: Catalog,
-    catalog_gz: Vec<u8>,
+    catalog_gz: GzippedAsset,
     assets_gz: HashMap<&'static str, GzippedAsset>,
 }
 
@@ -93,7 +93,12 @@ pub fn start(
             themes,
         };
         let catalog_json = serde_json::to_vec(&catalog).unwrap();
-        let catalog_gz = gzip(&catalog_json).unwrap();
+        let catalog_compressed = gzip(&catalog_json).unwrap();
+        let catalog_gz = GzippedAsset {
+            mime: extension_to_mime("json"),
+            hash: encoded_hash(&catalog_compressed),
+            bytes: catalog_compressed,
+        };
 
         Model {
             catalog,
@@ -150,16 +155,16 @@ pub fn start(
 
         let _handler = |request: &Request| -> Response {
             match model.assets_gz.get(request.raw_url()) {
-                Some(asset) => return assets(request, asset),
+                Some(asset) => return get_asset(request, asset),
                 None => {}
             }
 
             router!(request,
-                (GET) ["/api/catalog"] => {catalog(&model, request)},
-                (GET) ["/api/download/{slug}", slug: String] => {download(&model, request, &slug)},
-                (GET) ["/api/image/{id}", id: String] => {image(&model, request, &id)},
-                (GET) ["/"] => {index(&model, request)},
-                _ => index(&model, request),
+                (GET) ["/api/catalog"] => {get_catalog(request, &model.catalog_gz)},
+                (GET) ["/api/download/{slug}", slug: String] => {get_download(&model, &slug)},
+                (GET) ["/api/image/{id}", id: String] => {get_image(request, &id)},
+                (GET) ["/"] => {get_index(request, &model)},
+                _ => get_index(request, &model),
             )
         };
         let response = _handler(request);
@@ -198,7 +203,7 @@ pub fn start(
     panic!("The server closed unexpectedly");
 }
 
-fn index(model: &Model, _: &Request) -> Response {
+fn get_index(request: &Request, model: &Model) -> Response {
     let index = match model.assets_gz.get("/index.html") {
         Some(index) => index,
         None => return Response::empty_404(),
@@ -224,9 +229,11 @@ fn index(model: &Model, _: &Request) -> Response {
         .with_unique_header("x-content-type-options", "nosniff")
         .with_unique_header("x-frame-options", "deny")
         .with_unique_header("x-xss-protection", "1; mode=block")
+        .with_etag(request, index.hash.clone())
+        .with_public_cache(60)
 }
 
-fn assets(request: &Request, asset: &GzippedAsset) -> Response {
+fn get_asset(request: &Request, asset: &GzippedAsset) -> Response {
     // Asset caching is implemented with ETagging because the index isn't dynamically generated
     // so there's no way to embed the hash. I don't actually think it's worth the effort atm.
     // ETagging is just fine.
@@ -234,10 +241,10 @@ fn assets(request: &Request, asset: &GzippedAsset) -> Response {
     Response::from_data(asset.mime, asset.bytes.clone())
         .with_unique_header("content-encoding", "gzip")
         .with_etag(request, asset.hash.clone())
-        .with_public_cache(60 * 60)
+        .with_public_cache(60 * 60 * 24)
 }
 
-fn download(model: &Model, _: &Request, slug: &str) -> Response {
+fn get_download(model: &Model, slug: &str) -> Response {
     let game = match model.catalog.games.iter().find(|game| game.slug == slug) {
         Some(game) => game,
         None => {
@@ -265,9 +272,11 @@ fn download(model: &Model, _: &Request, slug: &str) -> Response {
     )
 }
 
-fn catalog(model: &Model, _: &Request) -> Response {
-    Response::from_data(extension_to_mime("json"), model.catalog_gz.clone())
+fn get_catalog(request: &Request, catalog: &GzippedAsset) -> Response {
+    Response::from_data(extension_to_mime("json"), catalog.bytes.clone())
         .with_unique_header("content-encoding", "gzip")
+        .with_etag(request, catalog.hash.clone())
+        .with_public_cache(60)
 }
 
 enum ImageSize {
@@ -275,7 +284,7 @@ enum ImageSize {
     Original,
 }
 
-fn image(_: &Model, request: &Request, image_id: &str) -> Response {
+fn get_image(request: &Request, image_id: &str) -> Response {
     let size = match request.get_param("size").as_deref() {
         Some("Thumbnail") => ImageSize::Thumbnail,
         Some("Original") => ImageSize::Original,
