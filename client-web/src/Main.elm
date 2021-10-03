@@ -4,7 +4,6 @@ import AllGames exposing (Msg(..))
 import Backend exposing (Catalog, Game, getCatalog)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
-import Css.Reset as Reset
 import Html.Styled exposing (Html, node, toUnstyled)
 import Html.Styled.Attributes exposing (href, rel)
 import Http
@@ -192,18 +191,12 @@ view model =
             case loaded.page of
                 AllGames ->
                     { title = "Grifter"
-                    , body =
-                        [ Reset.meyerV2
-                        , AllGames.view loaded.catalog loaded.allGames |> Html.Styled.map MsgAllGames
-                        ]
+                    , body = [ AllGames.view loaded.catalog loaded.allGames |> Html.Styled.map MsgAllGames ]
                     }
 
                 SingleGame game ->
                     { title = game.name ++ " - " ++ "Grifter"
-                    , body =
-                        [ Reset.meyerV2
-                        , SingleGame.view loaded.catalog game |> Html.Styled.map MsgSingleGame
-                        ]
+                    , body = [ SingleGame.view loaded.catalog game |> Html.Styled.map MsgSingleGame ]
                     }
 
 
