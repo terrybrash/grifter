@@ -4,7 +4,6 @@ use crate::game::Game;
 use crate::igdb;
 use crate::twitch;
 use crossbeam_channel::{bounded, Receiver, Sender};
-use flate2::write::GzEncoder;
 use image::GenericImageView;
 use rouille::{extension_to_mime, router, Request, Response, Server};
 use serde::Serialize;
@@ -13,12 +12,6 @@ use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-
-pub fn gzip(bytes: &[u8]) -> io::Result<Vec<u8>> {
-    let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::best());
-    encoder.write_all(bytes)?;
-    encoder.finish()
-}
 
 #[derive(Clone)]
 struct Model {
@@ -140,36 +133,27 @@ pub fn start(
 
     let is_https_enabled = config.https;
 
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    let requests = AtomicUsize::new(0);
     let handler = move |request: &Request| -> Response {
-        let id = requests.fetch_add(1, Ordering::Relaxed);
         println!(
-            "[Request  #{id}] {origin} to {protocol}://{host}{path}",
-            id = id,
+            "{origin} to {protocol}://{host}{path}",
             origin = request.remote_addr().ip(),
             host = request.header("host").unwrap_or(""),
             protocol = if is_https_enabled { "https" } else { "http" },
             path = request.raw_url()
         );
 
-        let _handler = |request: &Request| -> Response {
-            match model.assets_gz.get(request.raw_url()) {
-                Some(asset) => return get_asset(request, asset),
-                None => {}
-            }
+        match model.assets_gz.get(request.raw_url()) {
+            Some(asset) => return get_asset(request, asset),
+            None => {}
+        }
 
-            router!(request,
-                (GET) ["/api/catalog"] => {get_catalog(request, &model.catalog_gz)},
-                (GET) ["/api/download/{slug}", slug: String] => {get_download(&model, &slug)},
-                (GET) ["/api/image/{id}", id: String] => {get_image(request, &id)},
-                (GET) ["/"] => {get_index(request, &model)},
-                _ => get_index(request, &model),
-            )
-        };
-        let response = _handler(request);
-        println!("[Response #{id}] {status}", id = id, status = response.status_code);
-        response
+        router!(request,
+            (GET) ["/api/catalog"] => {get_catalog(request, &model.catalog_gz)},
+            (GET) ["/api/download/{slug}", slug: String] => {get_download(&model, &slug)},
+            (GET) ["/api/image/{id}", id: String] => {get_image(request, &id)},
+            (GET) ["/"] => {get_index(request, &model)},
+            _ => get_index(request, &model),
+        )
     };
 
     if config.https {
@@ -414,4 +398,12 @@ fn encoded_hash(bytes: &[u8]) -> String {
         hash = base64::encode_config(hash_bytes, config);
     });
     hash
+}
+
+pub fn gzip(bytes: &[u8]) -> io::Result<Vec<u8>> {
+    use flate2::write::GzEncoder;
+
+    let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::best());
+    encoder.write_all(bytes)?;
+    encoder.finish()
 }
