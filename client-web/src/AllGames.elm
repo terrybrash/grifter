@@ -9,6 +9,7 @@ import Html.Styled exposing (Html, a, button, div, h1, h3, img, input, label, ma
 import Html.Styled.Attributes as Attr exposing (class, css, href, id, placeholder, src, type_)
 import Html.Styled.Events as Event
 import Html.Styled.Keyed as Keyed
+import Html.Styled.Lazy exposing (lazy)
 import Pagination exposing (Pagination)
 import Set exposing (Set)
 import Shared exposing (black, fredoka, inter, rgbaFromColor, userSelectNone, white)
@@ -340,7 +341,7 @@ viewPaginator games =
         total =
             Pagination.count games
     in
-    div [ css [ margin (px 32), displayFlex, alignItems center, justifyContent center ] ]
+    div [ id "pagination", css [ margin (px 32), displayFlex, alignItems center, justifyContent center ] ]
         [ button attrPrev [ div [ css [ marginRight (ch 0.5), lineHeight zero ] ] [ viewLeftAngle 13 13 ], text "Back" ]
         , span [ css [ fontWeight (int 300) ] ] [ text ("Page " ++ String.fromInt (current + 1) ++ " of " ++ String.fromInt total) ]
         , button attrNext [ text "Next", div [ css [ marginLeft (ch 0.5), lineHeight zero ] ] [ viewRightAngle 13 13 ] ]
@@ -373,8 +374,7 @@ viewSidebar catalog model =
         , viewFilter FilterSinglePlayer Shared.blueLight "Single Player" model.mustHaveSinglePlayer
         ]
     , viewFilterHeader Shared.greenDark "Genre"
-    , div []
-        (List.map viewGenreFilter catalog.genres)
+    , div [] (List.map viewGenreFilter catalog.genres)
     , viewFilterHeader Shared.magentaDark "Store"
     , div []
         [ viewFilter FilterSteam Shared.magentaLight "Steam" model.mustHaveSteam
@@ -511,9 +511,11 @@ viewSearch search =
 viewGames : Pagination (List Game) -> Html Msg
 viewGames games =
     Keyed.node "div"
-        [ css
+        [ id "games"
+        , css
             [ displayFlex
             , flexDirection column
+            , property "gap" "30px"
             ]
         ]
         (games |> Pagination.current |> Tuple.second |> List.map viewKeyedGame)
@@ -521,7 +523,7 @@ viewGames games =
 
 viewKeyedGame : Game -> ( String, Html Msg )
 viewKeyedGame game =
-    ( game.name, viewGame game )
+    ( game.name, lazy viewGame game )
 
 
 viewGame : Game -> Html Msg
@@ -530,7 +532,6 @@ viewGame game =
         [ css
             [ displayFlex
             , flexDirection row
-            , marginBottom (px 30)
             , position relative
             , height (px 200)
             , overflow hidden
