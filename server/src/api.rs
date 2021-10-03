@@ -31,6 +31,7 @@ struct Model {
 struct GzippedAsset {
     mime: &'static str,
     bytes: Vec<u8>,
+    hash: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -77,9 +78,11 @@ pub fn start(
                 .and_then(OsStr::to_str)
                 .map(extension_to_mime)
                 .unwrap_or("application/octet-stream");
+            let hash = encoded_hash(&compressed);
             let asset = GzippedAsset {
                 mime,
                 bytes: compressed,
+                hash,
             };
             assets_gz.insert(url, asset);
         }
@@ -147,7 +150,7 @@ pub fn start(
 
         let _handler = |request: &Request| -> Response {
             match model.assets_gz.get(request.raw_url()) {
-                Some(asset) => return assets(asset),
+                Some(asset) => return assets(request, asset),
                 None => {}
             }
 
@@ -223,9 +226,15 @@ fn index(model: &Model, _: &Request) -> Response {
         .with_unique_header("x-xss-protection", "1; mode=block")
 }
 
-fn assets(asset: &GzippedAsset) -> Response {
+fn assets(request: &Request, asset: &GzippedAsset) -> Response {
+    // Asset caching is implemented with ETagging because the index isn't dynamically generated
+    // so there's no way to embed the hash. I don't actually think it's worth the effort atm.
+    // ETagging is just fine.
+
     Response::from_data(asset.mime, asset.bytes.clone())
         .with_unique_header("content-encoding", "gzip")
+        .with_etag(request, asset.hash.clone())
+        .with_public_cache(60 * 60)
 }
 
 fn download(model: &Model, _: &Request, slug: &str) -> Response {
@@ -382,4 +391,18 @@ fn max_dimensions(dimensions: (u32, u32), max: (Option<u32>, Option<u32>)) -> (u
         height = u32::min(height, max_height);
     }
     (width, height)
+}
+
+fn encoded_hash(bytes: &[u8]) -> String {
+    use blake2::digest::{Update, VariableOutput};
+    use blake2::VarBlake2b;
+
+    let mut hash = String::new();
+    let mut hasher = VarBlake2b::new(10).unwrap();
+    hasher.update(bytes);
+    hasher.finalize_variable(|hash_bytes| {
+        let config = base64::Config::new(base64::CharacterSet::UrlSafe, false);
+        hash = base64::encode_config(hash_bytes, config);
+    });
+    hash
 }
