@@ -3,12 +3,14 @@ module Main exposing (main)
 import AllGames exposing (Msg(..))
 import Backend exposing (Catalog, Game, getCatalog)
 import Browser exposing (UrlRequest)
+import Browser.Dom exposing (Viewport)
 import Browser.Navigation
-import Html.Styled exposing (Html, node, toUnstyled)
-import Html.Styled.Attributes exposing (href, rel)
+import Dict exposing (Dict)
+import Html.Styled exposing (Html, toUnstyled)
 import Http
 import Shared
 import SingleGame exposing (Msg(..))
+import Task
 import Url exposing (Url)
 import Url.Builder exposing (Root(..))
 import Url.Parser exposing ((</>))
@@ -21,18 +23,20 @@ main =
         , update = update
         , init = init
         , subscriptions = \_ -> Shared.onKeyDown KeyDown
-        , onUrlChange = ChangedUrl
-        , onUrlRequest = ClickedLink
+        , onUrlRequest = UrlRequested
+        , onUrlChange = UrlChanged
         }
 
 
 type Msg
     = GotCatalog (Result Http.Error Catalog)
-    | ClickedLink UrlRequest
-    | ChangedUrl Url
+    | UrlRequested UrlRequest
+    | UrlChanged Url
     | KeyDown Shared.KeyboardEvent
     | MsgAllGames AllGames.Msg
     | MsgSingleGame SingleGame.Msg
+    | MovedViewport Float Float
+    | CachedViewport UrlRequest Viewport
 
 
 type Page
@@ -41,52 +45,40 @@ type Page
 
 
 type Model
-    = Loading { key : Browser.Navigation.Key, route : Route }
+    = LoadingCatalog { key : Browser.Navigation.Key, url : Url }
     | LoadingFailed Http.Error
     | NotFound
     | Loaded
         { key : Browser.Navigation.Key
-        , route : Route
+        , url : Url
         , page : Page
         , catalog : Catalog
         , allGames : AllGames.Model
+        , viewportByUrl : Dict String Viewport
         }
 
 
 init : flags -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
 init _ url key =
-    let
-        route =
-            routeFromUrl url
-    in
-    case route of
-        Unknown ->
-            ( NotFound, Cmd.none )
-
-        Index ->
-            ( Loading { key = key, route = route }
-            , Cmd.batch
-                [ getCatalog GotCatalog
-                , Browser.Navigation.replaceUrl key "games"
-                ]
-            )
-
-        _ ->
-            ( Loading { key = key, route = route }, getCatalog GotCatalog )
+    ( LoadingCatalog { key = key, url = url }, getCatalog GotCatalog )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
-        ( GotCatalog (Ok catalog), Loading loading ) ->
-            case loading.route of
+        ( GotCatalog (Ok catalog), LoadingCatalog loading ) ->
+            case routeFromUrl loading.url of
+                Index ->
+                    ( model, Browser.Navigation.replaceUrl loading.key "/games" )
+
                 Games ->
                     ( Loaded
                         { key = loading.key
-                        , route = loading.route
+                        , url = loading.url
                         , page = AllGames
                         , allGames = AllGames.init catalog
                         , catalog = catalog
+                        , viewportByUrl = Dict.empty
                         }
                     , Cmd.none
                     )
@@ -96,10 +88,11 @@ update msg model =
                         Just game ->
                             ( Loaded
                                 { key = loading.key
-                                , route = loading.route
+                                , url = loading.url
                                 , page = SingleGame game
                                 , allGames = AllGames.init catalog
                                 , catalog = catalog
+                                , viewportByUrl = Dict.empty
                                 }
                             , Cmd.none
                             )
@@ -107,13 +100,10 @@ update msg model =
                         Nothing ->
                             ( NotFound, Cmd.none )
 
-                Index ->
-                    update msg (Loading { loading | route = Games })
-
                 Unknown ->
                     ( NotFound, Cmd.none )
 
-        ( GotCatalog (Err err), Loading _ ) ->
+        ( GotCatalog (Err err), LoadingCatalog _ ) ->
             ( LoadingFailed err, Cmd.none )
 
         ( MsgAllGames msg_, Loaded loaded ) ->
@@ -126,24 +116,44 @@ update msg model =
         ( MsgSingleGame GoBack, Loaded loaded ) ->
             ( model, Browser.Navigation.replaceUrl loaded.key "/games" )
 
-        ( ClickedLink (Browser.Internal url), Loaded loaded ) ->
-            ( model, Browser.Navigation.pushUrl loaded.key (Url.toString url) )
+        ( UrlRequested (Browser.Internal url), Loaded _ ) ->
+            ( model
+            , Task.perform (CachedViewport (Browser.Internal url)) Browser.Dom.getViewport
+            )
 
-        ( ChangedUrl url, Loaded loaded ) ->
+        ( CachedViewport (Browser.Internal url) viewport, Loaded loaded ) ->
+            ( Loaded { loaded | viewportByUrl = Dict.insert (Url.toString loaded.url) viewport loaded.viewportByUrl }
+            , Browser.Navigation.pushUrl loaded.key (Url.toString url)
+            )
+
+        ( UrlChanged url, Loaded loaded ) ->
+            let
+                ( x, y ) =
+                    loaded.viewportByUrl
+                        |> Dict.get (Url.toString url)
+                        |> Maybe.map (\viewport -> ( viewport.viewport.x, viewport.viewport.y ))
+                        |> Maybe.withDefault ( 0, 0 )
+            in
             case routeFromUrl url of
                 Game slug ->
                     case find (\g -> g.slug == slug) loaded.catalog.games of
                         Just game ->
-                            ( Loaded { loaded | page = SingleGame game }, Cmd.none )
+                            ( Loaded { loaded | page = SingleGame game }
+                            , Task.perform (\_ -> MovedViewport x y) (Browser.Dom.setViewport x y)
+                            )
 
                         Nothing ->
                             ( NotFound, Cmd.none )
 
                 Games ->
-                    ( Loaded { loaded | page = AllGames }, Cmd.none )
+                    ( Loaded { loaded | page = AllGames }
+                    , Task.perform (\_ -> MovedViewport x y) (Browser.Dom.setViewport x y)
+                    )
 
                 Index ->
-                    ( Loaded { loaded | page = AllGames }, Browser.Navigation.replaceUrl loaded.key "games" )
+                    ( Loaded { loaded | page = AllGames }
+                    , Browser.Navigation.replaceUrl loaded.key "/games"
+                    )
 
                 Unknown ->
                     ( NotFound, Cmd.none )
@@ -172,7 +182,7 @@ find isGood list =
 view : Model -> Document Msg
 view model =
     case model of
-        Loading _ ->
+        LoadingCatalog _ ->
             { title = "Grifter"
             , body = []
             }
@@ -211,11 +221,6 @@ toUnstyledDocument document =
     { title = document.title
     , body = List.map toUnstyled document.body
     }
-
-
-linkStylesheet : String -> Html msg
-linkStylesheet src =
-    node "link" [ rel "stylesheet", href src ] []
 
 
 
