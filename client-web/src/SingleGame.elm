@@ -264,7 +264,8 @@ viewScreenshot game screenshot =
             , css
                 [ display block
                 , width (pct 100)
-                , height auto
+                , height (pct 100)
+                , property "object-fit" "cover"
                 , case game.graphics of
                     Backend.Pixelated ->
                         property "image-rendering" "pixelated"
