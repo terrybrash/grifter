@@ -28,20 +28,8 @@ main =
         }
 
 
-type Msg
-    = GotCatalog (Result Http.Error Catalog)
-    | UrlRequested UrlRequest
-    | UrlChanged Url
-    | KeyDown Shared.KeyboardEvent
-    | MsgAllGames AllGames.Msg
-    | MsgSingleGame SingleGame.Msg
-    | MovedViewport Float Float
-    | CachedViewport UrlRequest Viewport
 
-
-type Page
-    = AllGames
-    | SingleGame Game
+--- INIT ---
 
 
 type Model
@@ -58,9 +46,29 @@ type Model
         }
 
 
+type Page
+    = AllGames
+    | SingleGame Game
+
+
 init : flags -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
 init _ url key =
     ( LoadingCatalog { key = key, url = url }, getCatalog GotCatalog )
+
+
+
+--- UPDATE ---
+
+
+type Msg
+    = GotCatalog (Result Http.Error Catalog)
+    | UrlRequested UrlRequest
+    | UrlChanged Url
+    | KeyDown Shared.KeyboardEvent
+    | MsgAllGames AllGames.Msg
+    | MsgSingleGame SingleGame.Msg
+    | MovedViewport Float Float
+    | CachedViewport UrlRequest Viewport
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -176,7 +184,7 @@ find isGood list =
 
 
 
--- VIEW
+--- VIEW ---
 
 
 view : Model -> Document Msg
@@ -224,7 +232,7 @@ toUnstyledDocument document =
 
 
 
--- ROUTING
+--- ROUTING ---
 
 
 type Route
