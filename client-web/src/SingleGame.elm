@@ -129,7 +129,7 @@ view catalog game =
             , css
                 [ property "display" "grid"
                 , property "grid-row" "2"
-                , property "grid-template-columns" "repeat(2, 1fr)"
+                , property "grid-template-columns" "repeat(auto-fit, minmax(400px,auto))"
                 , property "grid-gap" "10px"
                 , property "height" "min-content"
                 ]
