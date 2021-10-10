@@ -4,7 +4,7 @@ import AllGames exposing (Msg(..))
 import Backend exposing (Catalog, Game, getCatalog)
 import Browser exposing (UrlRequest)
 import Browser.Dom exposing (Viewport)
-import Browser.Navigation
+import Browser.Navigation as Nav
 import Dict exposing (Dict)
 import Html.Styled exposing (Html, toUnstyled)
 import Http
@@ -33,17 +33,20 @@ main =
 
 
 type Model
-    = LoadingCatalog { key : Browser.Navigation.Key, url : Url }
+    = LoadingCatalog { key : Nav.Key, url : Url }
     | LoadingFailed Http.Error
     | NotFound
-    | Loaded
-        { key : Browser.Navigation.Key
-        , url : Url
-        , page : Page
-        , catalog : Catalog
-        , allGames : AllGames.Model
-        , viewportByUrl : Dict String Viewport
-        }
+    | Loaded App
+
+
+type alias App =
+    { key : Nav.Key
+    , url : Url
+    , page : Page
+    , catalog : Catalog
+    , allGames : AllGames.Model
+    , viewportByUrl : Dict String Viewport
+    }
 
 
 type Page
@@ -51,9 +54,11 @@ type Page
     | SingleGame Game
 
 
-init : flags -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
+init : flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url key =
-    ( LoadingCatalog { key = key, url = url }, getCatalog GotCatalog )
+    ( LoadingCatalog { key = key, url = url }
+    , getCatalog GotCatalog
+    )
 
 
 
@@ -67,22 +72,112 @@ type Msg
     | KeyDown Shared.KeyboardEvent
     | MsgAllGames AllGames.Msg
     | MsgSingleGame SingleGame.Msg
-    | MovedViewport Float Float
-    | CachedViewport UrlRequest Viewport
+    | CachedViewport Url Viewport
+    | RevivedViewport Float Float
+    | ResetViewport
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case ( msg, model ) of
-        ( GotCatalog (Ok catalog), LoadingCatalog loading ) ->
-            case routeFromUrl loading.url of
+    case model of
+        Loaded app ->
+            updateApp msg app
+
+        LoadingCatalog loading ->
+            updateLoading msg loading
+
+        LoadingFailed _ ->
+            ( model, Cmd.none )
+
+        NotFound ->
+            ( model, Cmd.none )
+
+
+updateApp : Msg -> App -> ( Model, Cmd Msg )
+updateApp msg app =
+    case msg of
+        UrlRequested (Browser.External _) ->
+            ( Loaded app, Cmd.none )
+
+        UrlRequested (Browser.Internal url) ->
+            ( Loaded app
+            , Task.perform (CachedViewport url) Browser.Dom.getViewport
+            )
+
+        CachedViewport url viewport ->
+            ( Loaded (cacheViewport app viewport), Nav.pushUrl app.key (Url.toString url) )
+
+        UrlChanged url ->
+            case routeFromUrl url of
+                Game slug ->
+                    case find (\g -> g.slug == slug) app.catalog.games of
+                        Just game ->
+                            ( Loaded { app | url = url, page = SingleGame game }, reviveViewport app url )
+
+                        Nothing ->
+                            ( NotFound, Cmd.none )
+
+                Games ->
+                    ( Loaded { app | url = url, page = AllGames }, reviveViewport app url )
+
                 Index ->
-                    ( model, Browser.Navigation.replaceUrl loading.key "/games" )
+                    ( NotFound, Cmd.none )
+
+                Unknown ->
+                    ( NotFound, Cmd.none )
+
+        KeyDown event ->
+            case app.page of
+                AllGames ->
+                    update (MsgAllGames (AllGames.KeyDown event)) (Loaded app)
+
+                _ ->
+                    ( Loaded app, Cmd.none )
+
+        -- PAGES
+        MsgAllGames msg_ ->
+            let
+                ( newModel, cmd ) =
+                    AllGames.update app.catalog msg_ app.allGames
+            in
+            ( Loaded { app | allGames = newModel }, Cmd.map MsgAllGames cmd )
+
+        MsgSingleGame GoBack ->
+            ( Loaded app, Nav.replaceUrl app.key "/games" )
+
+        -- IGNORE
+        RevivedViewport _ _ ->
+            ( Loaded app, Cmd.none )
+
+        ResetViewport ->
+            ( Loaded app, Cmd.none )
+
+        -- IMPOSSIBLE
+        GotCatalog _ ->
+            ( Loaded app, Cmd.none )
+
+
+updateLoading : Msg -> { key : Nav.Key, url : Url } -> ( Model, Cmd Msg )
+updateLoading msg { key, url } =
+    case msg of
+        GotCatalog (Ok catalog) ->
+            case routeFromUrl url of
+                Index ->
+                    ( Loaded
+                        { key = key
+                        , url = url
+                        , page = AllGames
+                        , allGames = AllGames.init catalog
+                        , catalog = catalog
+                        , viewportByUrl = Dict.empty
+                        }
+                    , Nav.replaceUrl key "/games"
+                    )
 
                 Games ->
                     ( Loaded
-                        { key = loading.key
-                        , url = loading.url
+                        { key = key
+                        , url = url
                         , page = AllGames
                         , allGames = AllGames.init catalog
                         , catalog = catalog
@@ -95,8 +190,8 @@ update msg model =
                     case find (\g -> g.slug == slug) catalog.games of
                         Just game ->
                             ( Loaded
-                                { key = loading.key
-                                , url = loading.url
+                                { key = key
+                                , url = url
                                 , page = SingleGame game
                                 , allGames = AllGames.init catalog
                                 , catalog = catalog
@@ -111,71 +206,39 @@ update msg model =
                 Unknown ->
                     ( NotFound, Cmd.none )
 
-        ( GotCatalog (Err err), LoadingCatalog _ ) ->
+        GotCatalog (Err err) ->
             ( LoadingFailed err, Cmd.none )
 
-        ( MsgAllGames msg_, Loaded loaded ) ->
-            let
-                ( newModel, cmd ) =
-                    AllGames.update loaded.catalog msg_ loaded.allGames
-            in
-            ( Loaded { loaded | allGames = newModel }, Cmd.map MsgAllGames cmd )
-
-        ( MsgSingleGame GoBack, Loaded loaded ) ->
-            ( model, Browser.Navigation.replaceUrl loaded.key "/games" )
-
-        ( UrlRequested (Browser.Internal url), Loaded _ ) ->
-            ( model
-            , Task.perform (CachedViewport (Browser.Internal url)) Browser.Dom.getViewport
-            )
-
-        ( CachedViewport (Browser.Internal url) viewport, Loaded loaded ) ->
-            ( Loaded { loaded | viewportByUrl = Dict.insert (Url.toString loaded.url) viewport loaded.viewportByUrl }
-            , Browser.Navigation.pushUrl loaded.key (Url.toString url)
-            )
-
-        ( UrlChanged url, Loaded loaded ) ->
-            let
-                ( x, y ) =
-                    loaded.viewportByUrl
-                        |> Dict.get (Url.toString url)
-                        |> Maybe.map (\viewport -> ( viewport.viewport.x, viewport.viewport.y ))
-                        |> Maybe.withDefault ( 0, 0 )
-            in
-            case routeFromUrl url of
-                Game slug ->
-                    case find (\g -> g.slug == slug) loaded.catalog.games of
-                        Just game ->
-                            ( Loaded { loaded | page = SingleGame game }
-                            , Task.perform (\_ -> MovedViewport x y) (Browser.Dom.setViewport x y)
-                            )
-
-                        Nothing ->
-                            ( NotFound, Cmd.none )
-
-                Games ->
-                    ( Loaded { loaded | page = AllGames }
-                    , Task.perform (\_ -> MovedViewport x y) (Browser.Dom.setViewport x y)
-                    )
-
-                Index ->
-                    ( Loaded { loaded | page = AllGames }
-                    , Browser.Navigation.replaceUrl loaded.key "/games"
-                    )
-
-                Unknown ->
-                    ( NotFound, Cmd.none )
-
-        ( KeyDown event, Loaded loaded ) ->
-            case loaded.page of
-                AllGames ->
-                    update (MsgAllGames (AllGames.KeyDown event)) model
-
-                _ ->
-                    ( model, Cmd.none )
-
         _ ->
-            ( model, Cmd.none )
+            ( LoadingCatalog { key = key, url = url }, Cmd.none )
+
+
+
+-- VIEWPORT CACHING: Viewports are cached per-url. On URL _request_, we cache
+-- the current viewport for later. Subsequently, on URL _change_, we revive the
+-- viewport of the newly changed URL.
+
+
+cacheViewport : App -> Viewport -> App
+cacheViewport app viewport =
+    { app | viewportByUrl = Dict.insert (Url.toString app.url) viewport app.viewportByUrl }
+
+
+reviveViewport : App -> Url -> Cmd Msg
+reviveViewport app url =
+    let
+        cachedViewport : Maybe { x : Float, y : Float }
+        cachedViewport =
+            app.viewportByUrl
+                |> Dict.get (Url.toString url)
+                |> Maybe.map (\{ viewport } -> { x = viewport.x, y = viewport.y })
+    in
+    case cachedViewport of
+        Just viewport ->
+            Task.perform (\_ -> RevivedViewport viewport.x viewport.y) (Browser.Dom.setViewport viewport.x viewport.y)
+
+        Nothing ->
+            Task.perform (\_ -> ResetViewport) (Browser.Dom.setViewport 0 0)
 
 
 find : (a -> Bool) -> List a -> Maybe a
