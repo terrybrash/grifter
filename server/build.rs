@@ -22,9 +22,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(extension) => extension.to_ascii_lowercase(),
             None => continue,
         };
-        let should_check = ["elm", "json", "js", "svg", "css", "txt", "png", "ico", "html"]
-            .iter()
-            .any(|&e| e == extension);
+        let should_check = [
+            "elm", "json", "js", "svg", "css", "txt", "png", "ico", "html",
+        ]
+        .iter()
+        .any(|&e| e == extension);
         if should_check {
             if let Some(path) = path.to_str() {
                 println!("cargo:rerun-if-changed={}", path);
@@ -106,7 +108,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     fs_extra::dir::copy(client_path.join("assets"), out_dir.join("assets"), &options)?;
     fs::copy(client_path.join("index.html"), out_dir.join("index.html"))?;
-    fs::copy(client_path.join("robots.txt"), out_dir.join("robots.txt"))?;
     fs::copy(client_path.join("favicon.ico"), out_dir.join("favicon.ico"))?;
     // TODO: if the program throws an exception here, elm.js is left in client_web
 
