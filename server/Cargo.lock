@@ -124,7 +124,6 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
- "time 0.1.44",
  "winapi",
 ]
 
@@ -763,9 +762,8 @@ dependencies = [
 
 [[package]]
 name = "rouille"
-version = "3.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d6faef0edc01de844ea702d8d266fca43e61006ed23011420b29ee8e5dcd469"
+version = "3.4.0"
+source = "git+https://github.com/terrybrash/rouille#05bf3688c525741731ce078201add8a35936cbc0"
 dependencies = [
  "base64",
  "brotli2",
@@ -781,7 +779,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "threadpool",
- "time 0.3.2",
+ "time",
  "tiny_http",
  "url",
 ]
@@ -958,17 +956,6 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.1.44"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6db9e6914ab8b1ae1c260a4ae7a49b6c5611b40328a735b21862567685e73255"
-dependencies = [
- "libc",
- "wasi",
- "winapi",
-]
-
-[[package]]
-name = "time"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e0a10c9a9fb3a5dce8c2239ed670f1a2569fcf42da035f5face1b19860d52b0"
@@ -978,9 +965,8 @@ dependencies = [
 
 [[package]]
 name = "tiny_http"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ce51b50006056f590c9b7c3808c3bd70f0d1101666629713866c227d6e58d39"
+version = "0.9.0"
+source = "git+https://github.com/terrybrash/tiny-http#e82790e2ecc0c5694d15668c7a6a9406a341aef3"
 dependencies = [
  "ascii",
  "chrono",

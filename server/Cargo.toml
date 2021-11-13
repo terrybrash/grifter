@@ -14,7 +14,7 @@ unicode-normalization = '0.1.19'
 serde = { version = "1.0.130", features = ["derive"] }
 ureq = { version = "2.2.0" }
 image = "0.23.14"
-rouille = { version = "3.3.0", features = ["ssl"] }
+rouille = { git = "https://github.com/terrybrash/rouille", features = ["ssl"] }
 openssl-sys = { version = "0.9.66", features = ["vendored"] }
 num_cpus = "1.13.0"
 crossbeam-channel = "0.5.1"
