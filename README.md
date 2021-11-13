@@ -9,7 +9,7 @@
 ## What's good
 
 - Fast.
-- Designed with a focus on _discovery_. You have a lot of unplayed games...don't you? Find the hidden gem amongst your collection in Grifter.
+- Designed with a focus on _discovery_. You have a lot of unplayed games...don't you? Grifter can help you find the hidden gems amongst your collection.
 - Rich cataloging enabled by [IGDB](https://igdb.com): tags, screenshots, videos, descriptions.
 - Offline-friendly; everything's cached.
 - Single binary.
