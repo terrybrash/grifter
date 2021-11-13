@@ -12,6 +12,7 @@
 - Designed with a focus on _discovery_. You have a lot of unplayed games...don't you? Find the hidden gem amongst your collection in Grifter.
 - Rich cataloging enabled by [IGDB](https://igdb.com): tags, screenshots, videos, descriptions.
 - Offline-friendly; everything's cached.
+- Single binary.
 
 ## Installing
 
