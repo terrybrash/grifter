@@ -4,7 +4,7 @@
 
 [**Check out the demo.**](https://grifter.gg/)
 
-[![screenshot](screenshot.png)](https://grifter.gg/)
+[![screenshot](screenshot.webp)](https://grifter.gg/)
 
 ## What's good
 
