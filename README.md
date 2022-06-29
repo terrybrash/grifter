@@ -2,9 +2,9 @@
 
 **Grifter is your self-hosted video game library.** Browse your games and install them on any computer.
 
-[**Check out the demo.**](https://grifter.gg/)
+[**Set up Grifter in less than 10 minutes!**](https://www.youtube.com/watch?v=THkeMO4j5T0)
 
-[![screenshot](screenshot.webp)](https://grifter.gg/)
+[![screenshot](screenshot.webp)](https://www.youtube.com/watch?v=THkeMO4j5T0)
 
 ## What's good
 
