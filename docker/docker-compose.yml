@@ -1,0 +1,12 @@
+version: '3.3'
+services:
+    grifter:
+        image: 'grifter:latest'
+        container_name: grifter
+        volumes:
+            - '<Path on your host>/grifter.toml:/opt/grifter/grifter.toml'
+            - '<Path on your host>/cache:/opt/grifter/cache' # optional, but if you dont mount the cache as volume, it will be lost after the container is destroyed
+            - '<Path to your game root on host>:<Path configured in your grifter.toml as game root>:ro' # Mount games as "read-only"
+        ports:
+            - '<Port on your host>:39090'
+        restart: unless-stopped
