@@ -18,8 +18,8 @@
 
 Download one of the prebuilt binaries here:
 
+- [Linux](https://github.com/terrybrash/grifter/releases/tag/v2)
 - Windows TODO
-- Linux TODO
 - Raspberry PI TODO
 
 ## FAQ
