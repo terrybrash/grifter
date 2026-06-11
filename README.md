@@ -16,11 +16,7 @@
 
 ## Installing
 
-Download one of the prebuilt binaries here:
-
-- [Linux](https://github.com/terrybrash/grifter/releases/tag/v2)
-- Windows TODO
-- Raspberry PI TODO
+Download one of the prebuilt binaries from the [latest release](https://github.com/terrybrash/grifter/releases/latest):
 
 ## FAQ
 

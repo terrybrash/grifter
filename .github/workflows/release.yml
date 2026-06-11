@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            elm: binary-for-linux-64-bit.gz
+            binary: grifter
+            artifact: grifter-linux-x86_64
+          - os: windows-latest
+            elm: binary-for-windows-64-bit.gz
+            binary: grifter.exe
+            artifact: grifter-windows-x86_64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Elm
+        shell: bash
+        env:
+          ELM_URL: https://github.com/elm/compiler/releases/download/0.19.1
+        run: |
+          curl --fail --location --output elm.gz "$ELM_URL/${{ matrix.elm }}"
+          gunzip elm.gz
+          mkdir -p "$HOME/.elm-bin"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            mv elm "$HOME/.elm-bin/elm.exe"
+          else
+            chmod +x elm
+            mv elm "$HOME/.elm-bin/elm"
+          fi
+          echo "$HOME/.elm-bin" >> "$GITHUB_PATH"
+
+      - name: Install UglifyJS
+        run: npm install --global uglify-js
+
+      # Required to build the vendored OpenSSL on Windows.
+      - name: Install NASM
+        if: runner.os == 'Windows'
+        uses: ilammy/setup-nasm@v1
+
+      - name: Update Rust
+        run: rustup update stable
+
+      - name: Build
+        run: cargo build --release
+        working-directory: server
+
+      - name: Rename binary
+        shell: bash
+        run: |
+          mv "server/target/release/${{ matrix.binary }}" \
+            "${{ matrix.artifact }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+
+  release:
+    name: Create release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            grifter-linux-x86_64 \
+            grifter-windows-x86_64.exe
