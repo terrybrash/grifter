@@ -387,17 +387,16 @@ fn max_dimensions(dimensions: (u32, u32), max: (Option<u32>, Option<u32>)) -> (u
 }
 
 fn encoded_hash(bytes: &[u8]) -> String {
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine;
     use blake2::digest::{Update, VariableOutput};
-    use blake2::VarBlake2b;
+    use blake2::Blake2bVar;
 
-    let mut hash = String::new();
-    let mut hasher = VarBlake2b::new(10).unwrap();
+    let mut hasher = Blake2bVar::new(10).unwrap();
     hasher.update(bytes);
-    hasher.finalize_variable(|hash_bytes| {
-        let config = base64::Config::new(base64::CharacterSet::UrlSafe, false);
-        hash = base64::encode_config(hash_bytes, config);
-    });
-    hash
+    let mut hash_bytes = [0u8; 10];
+    hasher.finalize_variable(&mut hash_bytes).unwrap();
+    URL_SAFE_NO_PAD.encode(hash_bytes)
 }
 
 pub fn gzip(bytes: &[u8]) -> io::Result<Vec<u8>> {

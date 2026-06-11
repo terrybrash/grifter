@@ -3,7 +3,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashSet;
 use std::io::Read;
 use std::time::{Duration, Instant};
-use ureq::{get, post, Response};
+use ureq::http::Response;
+use ureq::{Agent, Body};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ImageDescription {
@@ -119,6 +120,16 @@ pub enum Error {
     Auth(u16, String),
 }
 
+// IGDB communicates auth and query errors through 4xx response bodies, so those
+// statuses need to come back as responses, not ureq errors.
+fn agent() -> Agent {
+    Agent::new_with_config(
+        Agent::config_builder()
+            .http_status_as_error(false)
+            .build(),
+    )
+}
+
 const IGDB_ENDPOINT: &str = "https://api.igdb.com/v4";
 const IGDB_QUERY_LIMIT: usize = 500; // Explained at https://api-docs.igdb.com/#pagination
 const IGDB_REQUEST_COOLDOWN: u64 = 250; // Explained at https://api-docs.igdb.com/#rate-limits
@@ -168,10 +179,11 @@ where
             limit = IGDB_QUERY_LIMIT
         );
         sleep_for_cooldown(last_request);
-        let response = post(&format!("{}/games", IGDB_ENDPOINT))
-            .set("client-id", client_id)
-            .set("authorization", &format!("Bearer {}", access_token))
-            .send_string(&query)
+        let response = agent()
+            .post(format!("{}/games", IGDB_ENDPOINT))
+            .header("client-id", client_id)
+            .header("authorization", format!("Bearer {}", access_token))
+            .send(&query)
             .unwrap();
 
         *last_request = Instant::now();
@@ -190,10 +202,11 @@ pub fn get_genres(
 ) -> Result<Vec<Genre>, Error> {
     sleep_for_cooldown(last_request);
     let query = format!("fields id, name, slug; limit {};", IGDB_QUERY_LIMIT);
-    let response = post(&format!("{}/genres", IGDB_ENDPOINT))
-        .set("client-id", client_id)
-        .set("authorization", &format!("Bearer {}", access_token))
-        .send_string(&query)
+    let response = agent()
+        .post(format!("{}/genres", IGDB_ENDPOINT))
+        .header("client-id", client_id)
+        .header("authorization", format!("Bearer {}", access_token))
+        .send(&query)
         .unwrap();
 
     *last_request = Instant::now();
@@ -207,10 +220,11 @@ pub fn get_themes(
 ) -> Result<Vec<Theme>, Error> {
     sleep_for_cooldown(last_request);
     let query = format!("fields id, name, slug; limit {};", IGDB_QUERY_LIMIT);
-    let response = post(&format!("{}/themes", IGDB_ENDPOINT))
-        .set("client-id", client_id)
-        .set("authorization", &format!("Bearer {}", access_token))
-        .send_string(&query)
+    let response = agent()
+        .post(format!("{}/themes", IGDB_ENDPOINT))
+        .header("client-id", client_id)
+        .header("authorization", format!("Bearer {}", access_token))
+        .send(&query)
         .unwrap();
 
     *last_request = Instant::now();
@@ -238,12 +252,12 @@ struct IgdbQueryError {
     pub cause: String,
 }
 
-fn handle_response<T>(response: Response) -> Result<T, Error>
+fn handle_response<T>(mut response: Response<Body>) -> Result<T, Error>
 where
     T: DeserializeOwned,
 {
-    let code = response.status();
-    let body = response.into_string().unwrap();
+    let code = response.status().as_u16();
+    let body = response.body_mut().read_to_string().unwrap();
 
     if code == 401 || code == 403 {
         let error = serde_json::from_str::<IgdbAuthError>(&body);
@@ -290,8 +304,12 @@ pub fn get_image(id: &str) -> Result<Image, ImageError> {
         "https://images.igdb.com/igdb/image/upload/t_original/{}.foobar", // IGDB ignores the extension; we can request anything.
         id
     );
-    let response = get(&url).call().map_err(ImageError::BadResponse)?;
-    let format = match response.header("content-type") {
+    let mut response = ureq::get(&url).call().map_err(ImageError::BadResponse)?;
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|value| value.to_str().ok());
+    let format = match content_type {
         Some("image/jpeg") => ImageFormat::Jpeg,
         Some("image/png") => ImageFormat::Png,
         Some("image/gif") => ImageFormat::Gif,
@@ -303,7 +321,8 @@ pub fn get_image(id: &str) -> Result<Image, ImageError> {
     };
     let mut image = Vec::with_capacity(1_000_000);
     response
-        .into_reader()
+        .body_mut()
+        .as_reader()
         .read_to_end(&mut image)
         .map_err(ImageError::BadRead)?;
     Ok(Image {

@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use ureq::post;
 
 #[derive(Debug, Deserialize)]
 pub struct Authentication {
@@ -20,22 +19,27 @@ pub struct AuthenticationError {
 }
 
 pub fn authenticate(client_id: &str, client_secret: &str) -> Result<Authentication, Error> {
-    let response = post("https://id.twitch.tv/oauth2/token")
+    let agent = ureq::Agent::new_with_config(
+        ureq::Agent::config_builder()
+            .http_status_as_error(false)
+            .build(),
+    );
+    let mut response = agent
+        .post("https://id.twitch.tv/oauth2/token")
         .query("client_id", client_id)
         .query("client_secret", client_secret)
         .query("grant_type", "client_credentials")
-        .call()
+        .send_empty()
         .unwrap();
 
-    match response.status() {
+    let body = response.body_mut().read_to_string().unwrap();
+    match response.status().as_u16() {
         200 => {
-            let auth = response.into_string().unwrap();
-            let auth = serde_json::from_str::<Authentication>(&auth).unwrap();
+            let auth = serde_json::from_str::<Authentication>(&body).unwrap();
             Ok(auth)
         }
         status => {
-            let error = response.into_string().unwrap();
-            let error = serde_json::from_str::<AuthenticationError>(&error).unwrap();
+            let error = serde_json::from_str::<AuthenticationError>(&body).unwrap();
             Err(Error::ClientError(status, error.message))
         }
     }
