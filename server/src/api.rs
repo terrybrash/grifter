@@ -54,12 +54,12 @@ pub fn start(
             _ => {}
         }
     }
-    genres.drain_filter(|genre| !games.iter().any(|game| game.genres.contains(&genre.id)));
+    genres.retain(|genre| games.iter().any(|game| game.genres.contains(&genre.id)));
     genres.sort_by(|a, b| a.name.cmp(&b.name));
 
     let mut themes =
         igdb::get_themes(&config.twitch_client_id, &access_token, last_request).unwrap();
-    themes.drain_filter(|theme| !games.iter().any(|game| game.themes.contains(&theme.id)));
+    themes.retain(|theme| games.iter().any(|game| game.themes.contains(&theme.id)));
     themes.sort_by(|a, b| a.name.cmp(&b.name));
 
     let model = {

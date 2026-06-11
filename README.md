@@ -32,7 +32,7 @@ No. You don't own the games you bought on Steam and you're not allowed to copy t
 
 Prerequisites:
 
-- Rust (nightly)
+- Rust (1.87 or newer)
 - [Perl](https://strawberryperl.com/)
 - Node
 

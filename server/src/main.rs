@@ -1,7 +1,3 @@
-#![feature(proc_macro_hygiene)]
-#![feature(decl_macro)]
-#![feature(drain_filter)]
-
 use config::Config;
 use std::fs;
 

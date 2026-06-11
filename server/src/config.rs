@@ -110,7 +110,7 @@ impl Config {
         let root = &mut config.root;
         let missing_games = config
             .games
-            .drain_filter(|g| !root.join(&g.path).exists())
+            .extract_if(.., |g| !root.join(&g.path).exists())
             .map(Warning::MissingExe)
             .collect::<Vec<_>>();
 
@@ -182,7 +182,7 @@ fn drain_duplicates(games: &mut Vec<Game>) -> Vec<Vec<Game>> {
     conflicting_slugs
         .map(|slug| {
             games
-                .drain_filter(|game| slug == game.slug.as_str())
+                .extract_if(.., |game| slug == game.slug.as_str())
                 .collect()
         })
         .collect()
